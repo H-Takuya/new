@@ -1,37 +1,36 @@
 body {
+  background: white;
+  color: black;
+  font-family: monospace;
   text-align: center;
-  font-family: sans-serif;
-  background: #222;
-  color: white;
+  margin-top: 20px;
 }
 
 #game {
   display: grid;
-  grid-template-columns: repeat(8, 40px);
-  margin: 20px auto;
-  gap: 2px;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 1px;
+  width: fit-content;
+  margin: 0 auto;
 }
 
 .cell {
-  width: 40px;
-  height: 40px;
-  background: #888;
-  color: black;
-  font-weight: bold;
-  font-size: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  line-height: 30px;
   cursor: pointer;
   user-select: none;
 }
 
 .cell.open {
-  background: #eee;
+  background: #f9f9f9;
   cursor: default;
 }
 
-.cell.flag {
-  background: #f90;
+.cell.flag::after {
+  content: "F";
+  color: red;
 }
 
