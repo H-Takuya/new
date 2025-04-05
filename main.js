@@ -1,5 +1,5 @@
-const SIZE = 80;
-const BOMBS = 100;
+const SIZE = 8;
+const BOMBS = 10;
 const game = document.getElementById("game");
 
 let grid = [];
