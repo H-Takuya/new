@@ -1,75 +1,59 @@
-const mapData = [
-  ['草', '草', '草', '村', '草'],
-  ['草', '敵', '草', '草', '草'],
-  ['草', '草', '主', '草', '草'],
-  ['草', '草', '草', '草', '草'],
-  ['草', '草', '草', '草', '草']
-];
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-let playerX = 2;
-let playerY = 2;
+let player = { x: 300, y: 200, size: 10, speed: 3 };
+let keys = {};
+let bullets = [];
 
-const mapEl = document.getElementById('map');
-const messageEl = document.getElementById('message-box');
-
-function renderMap() {
-  mapEl.innerHTML = '';
-  for (let y = 0; y < 5; y++) {
-    for (let x = 0; x < 5; x++) {
-      const div = document.createElement('div');
-      div.className = 'tile';
-
-      if (x === playerX && y === playerY) {
-        div.textContent = '＠'; // プレイヤー
-      } else {
-        const cell = mapData[y][x];
-        div.textContent = cell === '草' ? '🌿' : cell === '村' ? '🏘️' : cell === '敵' ? '👾' : ' ';
-      }
-
-      mapEl.appendChild(div);
-    }
-  }
-}
-
-function showMessage(text) {
-  messageEl.textContent = text;
-}
-
-document.addEventListener('keydown', (e) => {
-  const key = e.key;
-
-  if (key === 'ArrowUp' && playerY > 0) playerY--;
-  if (key === 'ArrowDown' && playerY < 4) playerY++;
-  if (key === 'ArrowLeft' && playerX > 0) playerX--;
-  if (key === 'ArrowRight' && playerX < 4) playerX++;
-
-  if (key === ' ') {
-    const around = [
-      [playerX, playerY - 1],
-      [playerX, playerY + 1],
-      [playerX - 1, playerY],
-      [playerX + 1, playerY]
-    ];
-
-    let talked = false;
-
-    for (const [x, y] of around) {
-      if (mapData[y]?.[x] === '村') {
-        showMessage("村人『こんにちは、旅の人！』");
-        talked = true;
-        break;
-      } else if (mapData[y]?.[x] === '敵') {
-        showMessage("スライムが現れた！(戦闘は未実装)");
-        talked = true;
-        break;
-      }
-    }
-
-    if (!talked) showMessage('誰もいない…');
-  }
-
-  renderMap();
+canvas.addEventListener("click", (e) => {
+  const angle = Math.atan2(e.offsetY - player.y, e.offsetX - player.x);
+  bullets.push({
+    x: player.x,
+    y: player.y,
+    dx: Math.cos(angle) * 5,
+    dy: Math.sin(angle) * 5
+  });
 });
 
-renderMap();
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+function movePlayer() {
+  if (keys['w']) player.y -= player.speed;
+  if (keys['s']) player.y += player.speed;
+  if (keys['a']) player.x -= player.speed;
+  if (keys['d']) player.x += player.speed;
+}
+
+function update() {
+  movePlayer();
+  bullets.forEach(b => {
+    b.x += b.dx;
+    b.y += b.dy;
+    // 塗り処理
+    ctx.fillStyle = "#66f";
+    ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
+  });
+}
+
+function draw() {
+  ctx.fillStyle = "#ddd";
+  ctx.fillRect(0, 0, canvas.width, canvas.height); // 背景（白）
+
+  // 先に地面は塗られる（update内で）
+
+  // プレイヤー
+  ctx.fillStyle = "#00f";
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
 

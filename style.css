@@ -1,36 +1,14 @@
 body {
-  font-family: monospace;
-  background-color: black;
-  color: white;
   text-align: center;
+  background: #222;
+  color: white;
+  font-family: sans-serif;
 }
 
-#game-container {
-  display: inline-block;
-  border: 2px solid white;
-  background-color: #222;
-  padding: 10px;
-}
-
-#map {
-  width: 160px;
-  height: 160px;
-  display: grid;
-  grid-template-columns: repeat(5, 32px);
-  grid-template-rows: repeat(5, 32px);
-}
-
-.tile {
-  width: 32px;
-  height: 32px;
-  font-size: 24px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-#message-box {
-  margin-top: 10px;
-  height: 40px;
+canvas {
+  background: #ddd;
+  border: 2px solid #333;
+  display: block;
+  margin: 0 auto;
 }
 
