@@ -1,59 +1,113 @@
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const SIZE = 8;
+const BOMBS = 10;
+const game = document.getElementById("game");
 
-let player = { x: 300, y: 200, size: 10, speed: 3 };
-let keys = {};
-let bullets = [];
+let grid = [];
+let bombSet = new Set();
 
-canvas.addEventListener("click", (e) => {
-  const angle = Math.atan2(e.offsetY - player.y, e.offsetX - player.x);
-  bullets.push({
-    x: player.x,
-    y: player.y,
-    dx: Math.cos(angle) * 5,
-    dy: Math.sin(angle) * 5
+function createGrid() {
+  for (let y = 0; y < SIZE; y++) {
+    grid[y] = [];
+    for (let x = 0; x < SIZE; x++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.dataset.x = x;
+      cell.dataset.y = y;
+      game.appendChild(cell);
+      grid[y][x] = { el: cell, opened: false, flagged: false, bomb: false, count: 0 };
+    }
+  }
+}
+
+function placeBombs() {
+  while (bombSet.size < BOMBS) {
+    const x = Math.floor(Math.random() * SIZE);
+    const y = Math.floor(Math.random() * SIZE);
+    const key = `${x},${y}`;
+    if (!bombSet.has(key)) {
+      bombSet.add(key);
+      grid[y][x].bomb = true;
+    }
+  }
+}
+
+function countBombs() {
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      if (grid[y][x].bomb) continue;
+      let count = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (grid[ny]?.[nx]?.bomb) count++;
+        }
+      }
+      grid[y][x].count = count;
+    }
+  }
+}
+
+function openCell(x, y) {
+  const cell = grid[y][x];
+  if (cell.opened || cell.flagged) return;
+  cell.opened = true;
+  cell.el.classList.add("open");
+  if (cell.bomb) {
+    cell.el.textContent = "💣";
+    alert("ゲームオーバー！");
+    revealAll();
+    return;
+  }
+  if (cell.count > 0) {
+    cell.el.textContent = cell.count;
+  } else {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (grid[ny]?.[nx]) openCell(nx, ny);
+      }
+    }
+  }
+}
+
+function revealAll() {
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const cell = grid[y][x];
+      if (cell.bomb) {
+        cell.el.textContent = "💣";
+        cell.el.classList.add("open");
+      }
+    }
+  }
+}
+
+function toggleFlag(x, y) {
+  const cell = grid[y][x];
+  if (cell.opened) return;
+  cell.flagged = !cell.flagged;
+  cell.el.classList.toggle("flag");
+  cell.el.textContent = cell.flagged ? "🚩" : "";
+}
+
+function addEventListeners() {
+  game.addEventListener("contextmenu", e => e.preventDefault());
+  game.addEventListener("click", e => {
+    const x = +e.target.dataset.x;
+    const y = +e.target.dataset.y;
+    openCell(x, y);
   });
-});
-
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-
-function movePlayer() {
-  if (keys['w']) player.y -= player.speed;
-  if (keys['s']) player.y += player.speed;
-  if (keys['a']) player.x -= player.speed;
-  if (keys['d']) player.x += player.speed;
-}
-
-function update() {
-  movePlayer();
-  bullets.forEach(b => {
-    b.x += b.dx;
-    b.y += b.dy;
-    // 塗り処理
-    ctx.fillStyle = "#66f";
-    ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
+  game.addEventListener("contextmenu", e => {
+    const x = +e.target.dataset.x;
+    const y = +e.target.dataset.y;
+    toggleFlag(x, y);
   });
 }
 
-function draw() {
-  ctx.fillStyle = "#ddd";
-  ctx.fillRect(0, 0, canvas.width, canvas.height); // 背景（白）
-
-  // 先に地面は塗られる（update内で）
-
-  // プレイヤー
-  ctx.fillStyle = "#00f";
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-
-loop();
+createGrid();
+placeBombs();
+countBombs();
+addEventListeners();
 

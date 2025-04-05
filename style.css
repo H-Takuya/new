@@ -1,14 +1,37 @@
 body {
   text-align: center;
+  font-family: sans-serif;
   background: #222;
   color: white;
-  font-family: sans-serif;
 }
 
-canvas {
-  background: #ddd;
-  border: 2px solid #333;
-  display: block;
-  margin: 0 auto;
+#game {
+  display: grid;
+  grid-template-columns: repeat(8, 40px);
+  margin: 20px auto;
+  gap: 2px;
+}
+
+.cell {
+  width: 40px;
+  height: 40px;
+  background: #888;
+  color: black;
+  font-weight: bold;
+  font-size: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cell.open {
+  background: #eee;
+  cursor: default;
+}
+
+.cell.flag {
+  background: #f90;
 }
 
