@@ -178,6 +178,11 @@
     }
 
     function update() {
+      // すべての惑星が吸い込まれたらリセット
+      if (planets.length === 0) {
+        generatePlanets();
+        resetMeteor();
+      }
       // 太陽の描画
       ctx.beginPath();
       ctx.arc(centerX, centerY, 15, 0, Math.PI * 2);
@@ -315,4 +320,5 @@
   </script>
 </body>
 </html>
+
 
