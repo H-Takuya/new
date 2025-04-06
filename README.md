@@ -37,10 +37,6 @@
 ### 🚀 起動方法
 
 ```bash
-# クローン
-git clone https://github.com/yourname/galaxy-simulator.git
-cd galaxy-simulator
-
 # ブラウザで index.html を開くだけ！
 open index.html  # macOS
 start index.html # Windows
