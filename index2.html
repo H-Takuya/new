@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>（再現）</title>
+  <style>
+    body {
+      background-color: black;
+      color: white;
+      font-family: monospace;
+      text-align: center;
+    }
+    .battle-container {
+      width: 600px;
+      margin: 0 auto;
+      border: 2px solid white;
+      padding: 10px;
+      background-color: #222;
+    }
+    .enemy {
+      margin: 10px 0;
+    }
+    .enemy img {
+      width: 200px;
+    }
+    .status {
+      text-align: left;
+      margin: 10px auto;
+      width: 90%;
+    }
+    .commands button {
+      margin: 5px;
+      padding: 10px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="battle-container">
+    <div class="enemy">
+      <h2>シドー</h2>
+      <img src="https://upload.wikimedia.org/wikipedia/ja/thumb/4/4a/DQ2_Sidoh.png/220px-DQ2_Sidoh.png" alt="シドー">
+      <p id="sido-status">HP: ???</p>
+    </div>
+
+    <div class="status" id="party-status">
+      <p>ローレシア　HP: 90/90</p>
+      <p>サマルトリア HP: 70/70</p>
+      <p>ムーンブルク HP: 60/60</p>
+    </div>
+
+    <div id="battle-log">
+      <p>シドーがあらわれた！</p>
+    </div>
+
+    <div class="commands">
+      <button onclick="attack('ローレシア')">ローレシアのこうげき</button>
+      <button onclick="attack('サマルトリア')">サマルトリアのこうげき</button>
+      <button onclick="attack('ムーンブルク')">ムーンブルクのこうげき</button>
+    </div>
+  </div>
+
+  <script>
+    let sidoHP = 300;
+
+    function attack(character) {
+      const damage = Math.floor(Math.random() * 20) + 10;
+      sidoHP -= damage;
+      const log = document.getElementById("battle-log");
+      log.innerHTML = `<p>${character}のこうげき！ ${damage}のダメージ！</p>` + log.innerHTML;
+
+      if (sidoHP <= 0) {
+        sidoHP = 0;
+        document.getElementById("sido-status").textContent = "HP: 0";
+        log.innerHTML = `<p>シドーをたおした！！</p>` + log.innerHTML;
+        document.querySelector(".commands").innerHTML = "<p>勝利！！</p>";
+      } else {
+        document.getElementById("sido-status").textContent = `HP: ???`;
+        setTimeout(enemyTurn, 1000);
+      }
+    }
+
+    function enemyTurn() {
+      const targets = ["ローレシア", "サマルトリア", "ムーンブルク"];
+      const target = targets[Math.floor(Math.random() * targets.length)];
+      const damage = Math.floor(Math.random() * 25) + 5;
+      const log = document.getElementById("battle-log");
+      log.innerHTML = `<p>シドーのこうげき！ ${target}に${damage}のダメージ！</p>` + log.innerHTML;
+    }
+  </script>
+</body>
+</html>
+
