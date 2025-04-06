@@ -96,6 +96,16 @@
       { name: "海王星", color: "#bcaaa4", radius: 5.8, distance: 600, speed: 0.0005, angle: 0 },
     ];
 
+    let stars = [];
+    for (let i = 0; i < 300; i++) {
+      stars.push({
+        x: Math.random() * canvasWidth,
+        y: Math.random() * canvasHeight,
+        radius: Math.random() * 1.2,
+        alpha: 0.2 + Math.random() * 0.5
+      });
+    }
+
     let meteor = null;
     let blackHole = null;
 
@@ -112,6 +122,15 @@
       if (history.length > 50) history.pop();
       historyEl.textContent = history.join('\n');
       historyEl.scrollTop = 0;
+    }
+
+    function drawStars() {
+      for (const s of stars) {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
+        ctx.fill();
+      }
     }
 
     function drawSun() {
@@ -233,6 +252,7 @@
 
     function animate() {
       ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      drawStars();
       updateTime();
       drawSun();
       drawPlanets();
@@ -283,4 +303,3 @@
   </script>
 </body>
 </html>
-

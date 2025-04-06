@@ -21,7 +21,7 @@
 
 ## デモ
 
-![screenshot](https://your-image-link.example.com/preview.png)
+https://h-takuya.github.io/new/
 
 > 🔄 リアルタイムアニメーションのため、ブラウザで直接開いてご確認ください。
 
