@@ -104,27 +104,35 @@
       timestampEl.textContent = newDate.toDateString();
     }
 
+    // 🌠 隕石名ジェネレーター
+    function generateMeteorName() {
+      const num = Math.floor(100 + Math.random() * 900);
+      return "METEOR-" + num;
+    }
+
     // 🌠 隕石オブジェクト
     let meteor = {
       x: -100,
       y: Math.random() * canvas.height,
       speed: 6,
       radius: 10,
-      active: true
+      active: true,
+      name: generateMeteorName()
     };
 
-    // ⏱️ 1分ごとにリセット
+    // ⏱️ 10秒ごとに隕石リセット
     setInterval(() => {
       meteor.x = -100;
       meteor.y = Math.random() * canvas.height;
       meteor.active = true;
-    }, 60000);
+      meteor.name = generateMeteorName();
+    }, 10000);
 
     function update() {
       ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // ☀️ draw center (sun)
+      // ☀️ 太陽描画
       drawGlow(centerX, centerY, 60, "rgba(255,255,150,0.3)");
       ctx.beginPath();
       ctx.arc(centerX, centerY, 12, 0, Math.PI * 2);
@@ -145,12 +153,11 @@
           const dy = meteor.y - y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < planet.radius + meteor.radius) {
-            planets.splice(i, 1); // 惑星を削除
+            planets.splice(i, 1);
             continue;
           }
         }
 
-        // 軌道
         ctx.beginPath();
         ctx.arc(centerX, centerY, planet.distance, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
@@ -180,11 +187,17 @@
       // 🌠 隕石の描画と移動
       if (meteor.active) {
         meteor.x += meteor.speed;
+
         ctx.beginPath();
         ctx.arc(meteor.x, meteor.y, meteor.radius, 0, Math.PI * 2);
         ctx.fillStyle = "orange";
         ctx.fill();
         drawGlow(meteor.x, meteor.y, 30, "rgba(255,165,0,0.5)");
+
+        // 🔠 隕石の名前表示
+        ctx.fillStyle = "white";
+        ctx.font = "12px sans-serif";
+        ctx.fillText(meteor.name, meteor.x + 12, meteor.y - 8);
       }
 
       updateTime();
