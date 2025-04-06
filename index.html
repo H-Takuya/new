@@ -26,10 +26,23 @@
       padding: 6px 12px;
       border-radius: 8px;
     }
+    #history {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      max-height: 90%;
+      overflow-y: auto;
+      font-size: 14px;
+      background: rgba(0,0,0,0.6);
+      padding: 6px 12px;
+      border-radius: 8px;
+      white-space: pre-line;
+    }
   </style>
 </head>
 <body>
   <div id="timestamp">Loading...</div>
+  <div id="history"></div>
   <canvas id="sim"></canvas>
 
   <script>
@@ -42,13 +55,21 @@
     let centerY = canvas.height / 2;
 
     const timestampEl = document.getElementById("timestamp");
+    const historyEl = document.getElementById("history");
     const startDate = new Date("2025-01-01T00:00:00");
     let elapsedDays = 0;
+    let history = [];
 
     function updateTime() {
       elapsedDays += 0.05;
       const newDate = new Date(startDate.getTime() + elapsedDays * 86400000);
       timestampEl.textContent = newDate.toDateString();
+    }
+
+    function logDestructionTime(dateObj) {
+      const dateStr = dateObj.toLocaleString();
+      history.unshift(`☄️ 銀河滅亡: ${dateStr}`);
+      historyEl.textContent = history.join('\n');
     }
 
     const FADE_SPEED = 0.01;
@@ -178,12 +199,13 @@
     }
 
     function update() {
-      // すべての惑星が吸い込まれたらリセット
       if (planets.length === 0) {
+        const now = new Date(startDate.getTime() + elapsedDays * 86400000);
+        logDestructionTime(now);
         generatePlanets();
         resetMeteor();
       }
-      // 太陽の描画
+
       ctx.beginPath();
       ctx.arc(centerX, centerY, 15, 0, Math.PI * 2);
       ctx.fillStyle = "#ffffaa";
@@ -320,5 +342,4 @@
   </script>
 </body>
 </html>
-
 
