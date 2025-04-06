@@ -14,29 +14,10 @@
       margin: 0 auto;
       background: radial-gradient(circle, #000000 0%, #111111 100%);
     }
-    .button-wrapper {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      background-color: #fff;
-      color: #000;
-      border: none;
-      cursor: pointer;
-      border-radius: 5px;
-    }
   </style>
 </head>
 <body>
   <canvas id="sim"></canvas>
-  <div class="button-wrapper">
-    <button onclick="createParticles(100)">追加生成</button>
-  </div>
   <script>
     const canvas = document.getElementById("sim");
     const ctx = canvas.getContext("2d");
@@ -57,10 +38,6 @@
         vy: -Math.cos(angle) * speed,
         color: `hsl(${Math.random() * 360}, 100%, 70%)`
       });
-    }
-
-    function createParticles(count) {
-      for (let i = 0; i < count; i++) createParticle();
     }
 
     function update() {
@@ -88,11 +65,12 @@
 
     function animate() {
       update();
+      if (particles.length < 1000) createParticle();
       requestAnimationFrame(animate);
     }
 
-    createParticles(200);
     animate();
   </script>
 </body>
 </html>
+
