@@ -8,6 +8,8 @@
       margin: 0;
       background: black;
       overflow: hidden;
+      color: white;
+      font-family: sans-serif;
     }
     canvas {
       display: block;
@@ -15,9 +17,20 @@
       background: radial-gradient(circle at center, #000000 0%, #0a0a0a 80%, #111111 100%);
       image-rendering: pixelated;
     }
+    #timestamp {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 16px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 6px 12px;
+      border-radius: 8px;
+    }
   </style>
 </head>
 <body>
+  <div id="timestamp">Loading...</div>
   <canvas id="sim"></canvas>
   <script>
     const canvas = document.getElementById("sim");
@@ -42,7 +55,9 @@
         distance,
         speed,
         radius: 4 + i * 1.5,
-        color: colors[i % colors.length]
+        color: colors[i % colors.length],
+        rotation: 0,
+        rotationSpeed: 0.05 + Math.random() * 0.1
       });
     }
 
@@ -73,6 +88,16 @@
       ctx.fill();
     }
 
+    const startDate = new Date("2025-01-01T00:00:00");
+    let elapsedDays = 0;
+    const timestampEl = document.getElementById("timestamp");
+
+    function updateTime() {
+      elapsedDays += 0.1; // 1フレームで0.1日進む（調整可）
+      const newDate = new Date(startDate.getTime() + elapsedDays * 86400000);
+      timestampEl.textContent = newDate.toDateString();
+    }
+
     function update() {
       ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -86,6 +111,7 @@
 
       for (const planet of planets) {
         planet.angle += planet.speed;
+        planet.rotation += planet.rotationSpeed;
         const x = centerX + Math.cos(planet.angle) * planet.distance;
         const y = centerY + Math.sin(planet.angle) * planet.distance;
 
@@ -98,6 +124,16 @@
         // draw glow effect
         drawGlow(x, y, planet.radius * 3, planet.color);
 
+        // draw rotating indicator (self rotation)
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(planet.rotation);
+        ctx.beginPath();
+        ctx.arc(planet.radius - 1, 0, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+        ctx.restore();
+
         // draw planet
         ctx.beginPath();
         ctx.arc(x, y, planet.radius, 0, Math.PI * 2);
@@ -109,6 +145,8 @@
         ctx.font = "12px sans-serif";
         ctx.fillText(planet.name, x + planet.radius + 4, y);
       }
+
+      updateTime();
     }
 
     function animate() {
