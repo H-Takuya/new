@@ -32,11 +32,13 @@
       right: 10px;
       max-height: 90%;
       overflow-y: auto;
-      font-size: 14px;
-      background: rgba(0,0,0,0.6);
+      font-size: 13px;
+      background: rgba(0,0,0,0.4);
       padding: 6px 12px;
       border-radius: 8px;
       white-space: pre-line;
+      color: rgba(255, 255, 255, 0.6);
+      font-style: italic;
     }
   </style>
 </head>
@@ -206,17 +208,27 @@
         resetMeteor();
       }
 
+      // 背景薄くフェード
+      ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 太陽グラデーション
+      const sunGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 20);
+      sunGradient.addColorStop(0, "#ffffff");
+      sunGradient.addColorStop(0.3, "#ffe066");
+      sunGradient.addColorStop(0.6, "#ff9900");
+      sunGradient.addColorStop(1, "#ff3300");
+
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 15, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffaa";
+      ctx.arc(centerX, centerY, 20, 0, Math.PI * 2);
+      ctx.fillStyle = sunGradient;
       ctx.fill();
+
       ctx.fillStyle = "#fff";
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("Sun", centerX, centerY + 30);
       ctx.textAlign = "start";
-      ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       if (blackHole.active) {
         if (!blackHole.fadingOut && blackHole.opacity < 1) {
