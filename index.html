@@ -9,43 +9,61 @@
       background: black;
       overflow: hidden;
       color: white;
-      font-family: sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* フォント変更 */
     }
     canvas {
       display: block;
       margin: 0 auto;
-      background: radial-gradient(circle at center, #000000 0%, #0a0a0a 80%, #111111 100%);
+      /* 背景グラデーションを少し調整 */
+      background: radial-gradient(circle at center, #050505 0%, #0a0a10 70%, #101015 100%);
     }
     #timestamp {
       position: fixed;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-size: 16px;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 6px 12px;
-      border-radius: 8px;
+      top: 15px; /* 位置調整 */
+      left: 15px; /* 位置調整 */
+      color: #e0e0e0; /* 色調整 */
+      font-size: 18px; /* サイズ調整 */
+      background: rgba(0, 0, 0, 0.7); /* 背景調整 */
+      padding: 8px 15px; /* パディング調整 */
+      border-radius: 5px; /* 角丸調整 */
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5); /* 文字に影 */
     }
     #history {
       position: fixed;
-      top: 10px;
-      right: 10px;
-      max-height: 90%;
+      top: 15px; /* 位置調整 */
+      right: 15px; /* 位置調整 */
+      max-height: calc(100% - 30px); /* 高さを調整 */
       overflow-y: auto;
-      font-size: 13px;
-      background: rgba(0,0,0,0.4);
-      padding: 6px 12px;
-      border-radius: 8px;
+      font-size: 12px; /* サイズ調整 */
+      background: rgba(10, 10, 20, 0.5); /* 背景色調整 */
+      padding: 10px 15px; /* パディング調整 */
+      border-radius: 5px; /* 角丸調整 */
       white-space: pre-line;
-      color: rgba(255, 255, 255, 0.6);
-      font-style: italic;
+      color: rgba(200, 200, 255, 0.7); /* 色調整 */
+      font-style: normal; /* イタリック解除 */
+      border: 1px solid rgba(255, 255, 255, 0.1); /* 枠線追加 */
+      max-width: 300px; /* 最大幅設定 */
+    }
+    /* スクロールバーのスタイル */
+    #history::-webkit-scrollbar {
+        width: 5px;
+    }
+    #history::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.3);
+        border-radius: 5px;
+    }
+    #history::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.3);
+        border-radius: 5px;
+    }
+    #history::-webkit-scrollbar-thumb:hover {
+        background: rgba(255,255,255,0.5);
     }
   </style>
 </head>
 <body>
   <div id="timestamp">Loading...</div>
-  <div id="history"></div>
-  <canvas id="sim"></canvas>
+  <div id="history">シミュレーション履歴</div> <canvas id="sim"></canvas>
 
   <script>
     const canvas = document.getElementById("sim");
@@ -60,17 +78,48 @@
     const historyEl = document.getElementById("history");
     const startDate = new Date("2025-01-01T00:00:00");
     let elapsedDays = 0;
-    let history = [];
+    let history = ["シミュレーション開始: " + startDate.toLocaleString()]; // 初期履歴追加
+    historyEl.textContent = history.join('\n'); // 初期表示
 
-    function updateTime() {
-      elapsedDays += 0.05;
-      const newDate = new Date(startDate.getTime() + elapsedDays * 86400000);
-      timestampEl.textContent = newDate.toDateString();
+    // --- 星屑関連 ---
+    const numStars = 500; // 星の数
+    let stars = [];
+
+    function generateStars() {
+        stars = [];
+        for (let i = 0; i < numStars; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: Math.random() * 1.2, // 星のサイズ
+                alpha: 0.3 + Math.random() * 0.5 // 星の明るさ
+            });
+        }
     }
 
-    function logDestructionTime(dateObj) {
-      const dateStr = dateObj.toLocaleString();
-      history.unshift(`☄️ 銀河滅亡: ${dateStr}`);
+    function drawStars() {
+        stars.forEach(star => {
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`;
+            ctx.fill();
+        });
+    }
+    // ---------------
+
+    function updateTime() {
+      elapsedDays += 0.05; // 時間経過速度はそのまま
+      const newDate = new Date(startDate.getTime() + elapsedDays * 86400000);
+      timestampEl.textContent = `日付: ${newDate.toLocaleDateString()} ${newDate.toLocaleTimeString()}`; // 表示形式変更
+    }
+
+    function logEvent(message) { // 汎用ログ関数
+      const now = new Date(startDate.getTime() + elapsedDays * 86400000);
+      const dateStr = now.toLocaleString();
+      history.unshift(`[${dateStr}] ${message}`);
+      if (history.length > 50) { // 履歴の最大数を制限
+        history.pop();
+      }
       historyEl.textContent = history.join('\n');
     }
 
@@ -85,7 +134,8 @@
       opacity: 0,
       fadingOut: false,
       timeoutId: null,
-      attractionRadius: 200
+      attractionRadius: 250, // 吸引範囲を少し広げる
+      pullStrength: 0.0008 // 吸引力を調整可能に
     };
 
     let spaceship = {
@@ -99,61 +149,82 @@
     function spawnBlackHole() {
       if (blackHole.timeoutId) clearTimeout(blackHole.timeoutId);
 
-      blackHole.x = Math.random() * canvas.width;
-      blackHole.y = Math.random() * canvas.height;
-      blackHole.radius = 40 + Math.random() * 15;
+      blackHole.x = Math.random() * canvas.width * 0.8 + canvas.width * 0.1; // 画面端すぎないように調整
+      blackHole.y = Math.random() * canvas.height * 0.8 + canvas.height * 0.1; // 画面端すぎないように調整
+      blackHole.radius = 40 + Math.random() * 20; // サイズ範囲調整
       blackHole.active = true;
       blackHole.opacity = 0;
       blackHole.fadingOut = false;
       blackHole.angle = 0;
+      blackHole.attractionRadius = 200 + Math.random() * 100; // 毎回吸引範囲を変える
+      blackHole.pullStrength = 0.0006 + Math.random() * 0.0004; // 毎回吸引力を変える
 
-      const duration = 15000 + Math.random() * 5000;
+      logEvent(`🕳️ ブラックホール出現 (${Math.round(blackHole.x)}, ${Math.round(blackHole.y)})`);
+
+      const duration = 15000 + Math.random() * 10000; // 持続時間範囲調整
       blackHole.timeoutId = setTimeout(() => {
         blackHole.fadingOut = true;
-      }, duration - 3000);
+        logEvent(`⏳ ブラックホール消滅開始`);
+      }, duration - 3000); // 消滅開始時間を少し早める
 
-      // 宇宙船逃走スタート
+      // 宇宙船逃走スタート (ブラックホールから離れる方向に)
       spaceship.x = centerX;
       spaceship.y = centerY;
-      spaceship.vx = 2 + Math.random() * 2;
-      spaceship.vy = -2 - Math.random() * 2;
+      const escapeAngle = Math.atan2(centerY - blackHole.y, centerX - blackHole.x);
+      const escapeSpeed = 3 + Math.random() * 2;
+      spaceship.vx = Math.cos(escapeAngle) * escapeSpeed;
+      spaceship.vy = Math.sin(escapeAngle) * escapeSpeed;
       spaceship.active = true;
+      logEvent(`🚀 宇宙船緊急脱出開始`);
     }
 
-    spawnBlackHole();
-    setInterval(spawnBlackHole, 15000);
+    spawnBlackHole(); // 最初に必ず生成
+    setInterval(spawnBlackHole, 20000 + Math.random() * 10000); // 生成間隔をランダムに
 
-    const colors = ["#a9a9a9", "#e0c16c", "#4fc3f7", "#ff7043", "#fbc02d", "#d1c4e9", "#80cbc4"];
-    const names = ["Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus"];
+    const colors = ["#a9a9a9", "#e0c16c", "#4fc3f7", "#ff7043", "#fbc02d", "#d1c4e9", "#80cbc4", "#bcaaa4", "#a5d6a7"]; // 色追加
+    const names = ["水星", "金星", "地球", "火星", "木星", "土星", "天王星", "海王星", "冥王星"]; // 名前追加 (日本語化)
     let planets = [];
 
     function generatePlanets() {
       planets = [];
-      for (let i = 0; i < 7; i++) {
-        const distance = 70 + i * 50;
+      const numPlanets = 9; // 惑星数変更
+      for (let i = 0; i < numPlanets; i++) {
+        const distance = 60 + i * 45; // 距離調整
         const angle = Math.random() * Math.PI * 2;
-        const speed = 0.008 + (i * 0.0015);
+        const speed = 0.005 + (i * 0.0012); // 速度調整
         const planetData = {
           name: names[i],
           angle,
           distance,
           speed,
-          radius: 4 + i * 1.5,
+          radius: 3 + i * 1.2, // サイズ調整
           color: colors[i % colors.length],
-          moons: []
+          moons: [],
+          originalDistance: distance, // ブラックホール影響計算用
+          originalSpeed: speed      // ブラックホール影響計算用
         };
-        if (i === 2) {
-          planetData.moons.push({
-            name: "Moon",
-            distance: planetData.radius + 15,
-            angle: Math.random() * Math.PI * 2,
-            speed: 0.05,
-            radius: 2,
-            color: "#cccccc"
-          });
+        // 月を追加 (地球と木星、土星に)
+        if (i === 2 || i === 4 || i === 5) {
+          const numMoons = i === 2 ? 1 : (i === 4 ? 2 : 3); // 惑星に応じた月の数
+          for(let m = 0; m < numMoons; m++) {
+              planetData.moons.push({
+                name: `衛星${m+1}`,
+                distance: planetData.radius + 10 + m * 5, // 月の距離
+                angle: Math.random() * Math.PI * 2,
+                speed: 0.03 + Math.random() * 0.04, // 月の速度
+                radius: 1 + Math.random(), // 月のサイズ
+                color: "#cccccc"
+              });
+          }
         }
+        // 土星の輪
+        if (i === 5) {
+            planetData.ring = { color: "rgba(210, 190, 170, 0.5)", radius: planetData.radius + 10 };
+        }
+
         planets.push(planetData);
       }
+       logEvent("🪐 惑星系再生成完了");
     }
 
     generatePlanets();
@@ -161,38 +232,86 @@
     let meteor = {
       x: -100,
       y: Math.random() * canvas.height,
-      speed: 6 + Math.random() * 4,
-      radius: 8 + Math.random() * 8,
-      active: true
+      speed: 5 + Math.random() * 5, // 速度範囲調整
+      radius: 5 + Math.random() * 10, // サイズ範囲調整
+      active: true,
+      angle: Math.atan2(Math.random() * canvas.height - canvas.height/2, canvas.width), // 角度を追加
+      tail: [] // 軌跡用配列
     };
 
     function resetMeteor() {
-      meteor.x = -100;
+      meteor.x = -meteor.radius; // 開始位置調整
       meteor.y = Math.random() * canvas.height;
-      meteor.speed = 6 + Math.random() * 4;
-      meteor.radius = 8 + Math.random() * 8;
+      meteor.speed = 5 + Math.random() * 5;
+      meteor.radius = 5 + Math.random() * 10;
+      meteor.angle = Math.atan2(Math.random() * canvas.height - meteor.y, canvas.width - meteor.x); // 新しい角度
       meteor.active = true;
+      meteor.tail = []; // 軌跡リセット
+      //logEvent("🌠 新しい流星が出現"); // 頻繁すぎるのでコメントアウトも可
     }
+
+    // 一定間隔で流星をリセット
+    setInterval(resetMeteor, 8000 + Math.random() * 5000);
 
     function drawSpaceship() {
       if (!spaceship.active) return;
       spaceship.x += spaceship.vx;
       spaceship.y += spaceship.vy;
-      if (spaceship.x > canvas.width || spaceship.y < 0) {
+      // 画面外に出たら非アクティブ化
+      if (spaceship.x < -50 || spaceship.x > canvas.width + 50 || spaceship.y < -50 || spaceship.y > canvas.height + 50) {
         spaceship.active = false;
+        logEvent("🚀 宇宙船は銀河外へ脱出成功");
         return;
       }
 
+      // ブラックホールの影響を受ける
+      if (blackHole.active && blackHole.opacity > 0.1) {
+         const dx = blackHole.x - spaceship.x;
+         const dy = blackHole.y - spaceship.y;
+         const distSq = dx * dx + dy * dy;
+         const pullRadiusSq = blackHole.attractionRadius * blackHole.attractionRadius * 0.5; // 宇宙船への影響範囲は狭めに
+
+         if (distSq < pullRadiusSq) {
+             const dist = Math.sqrt(distSq);
+             const force = (pullRadiusSq - distSq) / pullRadiusSq * blackHole.pullStrength * 100 * blackHole.opacity; // 力を調整
+             spaceship.vx += (dx / dist) * force;
+             spaceship.vy += (dy / dist) * force;
+         }
+          // ブラックホールに接触したら破壊
+         if (distSq < (blackHole.radius * blackHole.radius)) {
+             spaceship.active = false;
+             logEvent("💥 宇宙船がブラックホールに捕獲された！");
+             // ここで爆発エフェクトなどを追加しても良い
+             return;
+         }
+      }
+
+
       ctx.save();
       ctx.translate(spaceship.x, spaceship.y);
-      ctx.rotate(Math.atan2(spaceship.vy, spaceship.vx));
+      ctx.rotate(Math.atan2(spaceship.vy, spaceship.vx) + Math.PI / 2); // 向きを進行方向に合わせる
       ctx.fillStyle = "white";
+      ctx.shadowColor = "cyan"; // 発光エフェクト
+      ctx.shadowBlur = 10;
+
+      // 宇宙船の形を描画
       ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-10, 3);
-      ctx.lineTo(-10, -3);
+      ctx.moveTo(0, -10); // 先端
+      ctx.lineTo(5, 5);  // 右翼
+      ctx.lineTo(0, 2);  // 尾部中央
+      ctx.lineTo(-5, 5); // 左翼
       ctx.closePath();
       ctx.fill();
+
+      // エンジン噴射エフェクト
+      ctx.fillStyle = `rgba(255, 150, 0, ${0.5 + Math.random() * 0.5})`; // オレンジ系の色で点滅
+      ctx.beginPath();
+      ctx.moveTo(0, 3);
+      ctx.lineTo(2, 7 + Math.random() * 3);
+      ctx.lineTo(-2, 7 + Math.random() * 3);
+      ctx.closePath();
+      ctx.fill();
+
       ctx.restore();
     }
 
@@ -202,153 +321,290 @@
       ctx.save();
       ctx.globalAlpha = blackHole.opacity;
 
-      blackHole.angle += 0.02;
+      blackHole.angle += 0.02; // 回転速度
       ctx.translate(blackHole.x, blackHole.y);
-      ctx.rotate(blackHole.angle);
 
-      const gradient = ctx.createRadialGradient(0, 0, blackHole.radius * 0.5, 0, 0, blackHole.radius * 2);
-      gradient.addColorStop(0, "rgba(255, 0, 255, 0.3)");
-      gradient.addColorStop(0.5, "rgba(255, 255, 0, 0.2)");
-      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-      ctx.fillStyle = gradient;
+      // 降着円盤 (Accretion Disk) のようなエフェクト
+      const diskRadius = blackHole.radius * 3;
+      const gradientDisk = ctx.createRadialGradient(0, 0, blackHole.radius * 0.8, 0, 0, diskRadius);
+      gradientDisk.addColorStop(0, `rgba(0, 0, 0, 0)`); // 中心付近は透明に
+      gradientDisk.addColorStop(0.3, `rgba(255, 100, 0, ${0.4 * blackHole.opacity})`); // 内側はオレンジっぽく
+      gradientDisk.addColorStop(0.6, `rgba(150, 50, 255, ${0.3 * blackHole.opacity})`); // 外側は紫っぽく
+      gradientDisk.addColorStop(1, `rgba(0, 0, 0, 0)`);
+
+      ctx.rotate(blackHole.angle * 0.5); // 円盤は少しゆっくり回転
+      ctx.fillStyle = gradientDisk;
       ctx.beginPath();
-      ctx.arc(0, 0, blackHole.radius * 2, 0, Math.PI * 2);
+      // ドーナツ状にするため、大きな円から小さい円を切り抜くパスを使う
+      ctx.arc(0, 0, diskRadius, 0, Math.PI * 2);
+      ctx.arc(0, 0, blackHole.radius * 0.7, 0, Math.PI * 2, true); // 反時計回りで内円
       ctx.fill();
+      ctx.rotate(-blackHole.angle * 0.5);
 
-      ctx.rotate(-blackHole.angle);
+
+       // ブラックホール本体（中心の黒い円）
+      ctx.rotate(blackHole.angle); // 本体は速く回転
       ctx.fillStyle = "black";
+      ctx.shadowColor = "magenta"; // 影の色で縁を強調
+      ctx.shadowBlur = 20 * blackHole.opacity;
       ctx.beginPath();
       ctx.arc(0, 0, blackHole.radius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowColor = "transparent"; // 影をリセット
+      ctx.rotate(-blackHole.angle);
 
-      const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.005);
-      ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 * pulse})`;
-      ctx.lineWidth = 2;
+      // シュバルツシルト半径のような境界線 (点滅)
+      const pulse = 0.8 + 0.2 * Math.sin(Date.now() * 0.008);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.4 * pulse * blackHole.opacity})`;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(0, 0, blackHole.radius + 3, 0, Math.PI * 2);
+      ctx.arc(0, 0, blackHole.radius + 2, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.restore();
+      ctx.restore(); // globalAlpha なども元に戻す
 
-      ctx.fillStyle = "#fff";
+      // ブラックホールのラベル表示（opacityに連動）
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * blackHole.opacity})`;
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Black Hole", blackHole.x, blackHole.y - blackHole.radius - 15);
+      ctx.fillText("Black Hole", blackHole.x, blackHole.y - blackHole.radius - 20); // 位置調整
       ctx.textAlign = "start";
     }
 
-    function update() {
-      if (planets.length === 0) {
-        const now = new Date(startDate.getTime() + elapsedDays * 86400000);
-        logDestructionTime(now);
-        generatePlanets();
-        resetMeteor();
-      }
+    function drawMeteor() {
+        if (!meteor.active) return;
 
-      ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+        // 軌跡の更新
+        meteor.tail.push({ x: meteor.x, y: meteor.y, radius: meteor.radius });
+        if (meteor.tail.length > 20) { // 軌跡の最大長
+            meteor.tail.shift();
+        }
+
+        meteor.x += Math.cos(meteor.angle) * meteor.speed;
+        meteor.y += Math.sin(meteor.angle) * meteor.speed;
+
+        if (meteor.x > canvas.width + meteor.radius * 2 || meteor.y < -meteor.radius * 2 || meteor.y > canvas.height + meteor.radius * 2 ) {
+            meteor.active = false; // 画面外に出たら非アクティブ化
+        } else {
+            // 軌跡の描画
+            for (let i = 0; i < meteor.tail.length; i++) {
+                const point = meteor.tail[i];
+                const alpha = (i / meteor.tail.length) * 0.5; // 尾に行くほど薄く
+                const radius = point.radius * (i / meteor.tail.length); // 尾に行くほど細く
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+                // 尾の色（オレンジから黄色へ）
+                const r = 255;
+                const g = 165 + (255 - 165) * (i / meteor.tail.length);
+                const b = 0;
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                ctx.fill();
+            }
+
+            // 流星本体の描画
+            ctx.beginPath();
+            const meteorGradient = ctx.createRadialGradient(meteor.x, meteor.y, 0, meteor.x, meteor.y, meteor.radius);
+            meteorGradient.addColorStop(0, "white");
+            meteorGradient.addColorStop(0.4, "yellow");
+            meteorGradient.addColorStop(1, "orange");
+            ctx.fillStyle = meteorGradient;
+            ctx.shadowColor = "red"; // 発光エフェクト
+            ctx.shadowBlur = 15;
+            ctx.arc(meteor.x, meteor.y, meteor.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowColor = "transparent"; // 影リセット
+        }
+    }
+
+    function update() {
+      // --- 描画処理 ---
+      // 画面クリア (半透明の黒で上書きして軌跡を表現)
+      ctx.fillStyle = "rgba(0, 0, 0, 0.25)"; // 少し濃くして残像感を調整
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const pulse = 1 + 0.1 * Math.sin(Date.now() * 0.005);
+      // 星屑を描画
+      drawStars();
+
+      // 太陽の描画
+      const pulse = 1 + 0.05 * Math.sin(Date.now() * 0.002); // 脈動を少し抑える
       const sunRadius = 20 * pulse;
 
-      const sunGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, sunRadius);
-      sunGradient.addColorStop(0, "#ffffff");
-      sunGradient.addColorStop(0.3, "#ffe066");
-      sunGradient.addColorStop(0.6, "#ff9900");
-      sunGradient.addColorStop(1, "#ff3300");
-
+      // 太陽コロナ (外側の光輪)
+      const coronaRadius = sunRadius * 2.5;
+      const coronaGradient = ctx.createRadialGradient(centerX, centerY, sunRadius * 0.8, centerX, centerY, coronaRadius);
+      coronaGradient.addColorStop(0, `rgba(255, 255, 200, 0.3)`);
+      coronaGradient.addColorStop(0.5, `rgba(255, 200, 150, 0.1)`);
+      coronaGradient.addColorStop(1, `rgba(255, 150, 0, 0)`);
+      ctx.fillStyle = coronaGradient;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
-      ctx.fillStyle = sunGradient;
+      ctx.arc(centerX, centerY, coronaRadius, 0, Math.PI * 2);
       ctx.fill();
 
+      // 太陽本体
+      const sunGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, sunRadius);
+      sunGradient.addColorStop(0, "#ffffff");
+      sunGradient.addColorStop(0.4, "#fff0a0"); // 色調整
+      sunGradient.addColorStop(0.8, "#ffcc00"); // 色調整
+      sunGradient.addColorStop(1, "#ff9900");
+      ctx.fillStyle = sunGradient;
+      ctx.shadowColor = "yellow"; // 太陽の輝き
+      ctx.shadowBlur = 30 * pulse;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowColor = "transparent"; // 影リセット
+
+      // 太陽ラベル
       ctx.fillStyle = "#fff";
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Sun", centerX, centerY + 30);
+      ctx.fillText("太陽", centerX, centerY + sunRadius + 15); // 位置調整
       ctx.textAlign = "start";
 
+      // ブラックホールの状態更新と描画
       if (blackHole.active) {
         if (!blackHole.fadingOut && blackHole.opacity < 1) {
-          blackHole.opacity += FADE_SPEED;
+          blackHole.opacity = Math.min(1, blackHole.opacity + FADE_SPEED);
         } else if (blackHole.fadingOut) {
-          blackHole.opacity -= FADE_SPEED;
+          blackHole.opacity = Math.max(0, blackHole.opacity - FADE_SPEED);
           if (blackHole.opacity <= 0) {
-            blackHole.opacity = 0;
             blackHole.active = false;
-            blackHole.timeoutId = null;
+            blackHole.timeoutId = null; // 念のためクリア
+            logEvent("⚫ ブラックホール完全に消滅");
           }
         }
       }
+      drawBlackHole(); // ブラックホール描画
 
-      drawBlackHole();
-      drawSpaceship();
-
+      // 惑星と月の更新・描画
       for (let i = planets.length - 1; i >= 0; i--) {
         const p = planets[i];
         p.angle += p.speed;
-        let x = centerX + Math.cos(p.angle) * p.distance;
-        let y = centerY + Math.sin(p.angle) * p.distance;
+        let currentX = centerX + Math.cos(p.angle) * p.distance;
+        let currentY = centerY + Math.sin(p.angle) * p.distance;
+        let affectedByBlackHole = false;
 
-        if (blackHole.active) {
-          const dx = blackHole.x - x;
-          const dy = blackHole.y - y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < blackHole.attractionRadius) {
-            const force = (blackHole.attractionRadius - dist) * 0.0005;
-            x += dx * force;
-            y += dy * force;
-            const dCenterX = x - centerX;
-            const dCenterY = y - centerY;
+        // ブラックホールの影響計算
+        if (blackHole.active && blackHole.opacity > 0.1) {
+          const dx_p = blackHole.x - currentX;
+          const dy_p = blackHole.y - currentY;
+          const distSq_p = dx_p * dx_p + dy_p * dy_p;
+          const pullRadiusSq = blackHole.attractionRadius * blackHole.attractionRadius;
+
+          if (distSq_p < pullRadiusSq) {
+            affectedByBlackHole = true;
+            const dist_p = Math.sqrt(distSq_p);
+            // 距離に応じて力を計算 (近づくほど強く)
+            const forceFactor = (pullRadiusSq - distSq_p) / pullRadiusSq; // 0~1の範囲
+            const force_p = forceFactor * blackHole.pullStrength * blackHole.opacity;
+
+            // 惑星の位置をブラックホール方向に移動させる
+            currentX += dx_p * force_p;
+            currentY += dy_p * force_p;
+
+            // 新しい位置に基づいて、中心からの距離と角度を再計算
+            const dCenterX = currentX - centerX;
+            const dCenterY = currentY - centerY;
             p.distance = Math.sqrt(dCenterX * dCenterX + dCenterY * dCenterY);
             p.angle = Math.atan2(dCenterY, dCenterX);
+
+            // 速度も変化させる（接線方向の速度を落とし、中心方向の速度を加える）
+            // 簡単な実装: 距離が縮むほど公転速度が落ちるように見せる
+             p.speed = p.originalSpeed * (p.distance / p.originalDistance);
+
+
+             // ブラックホールに吸い込まれたら惑星を削除
+             if (dist_p < blackHole.radius + p.radius) {
+                 logEvent(`💥 ${p.name} がブラックホールに飲み込まれた！`);
+                 planets.splice(i, 1);
+                 continue; // 次の惑星へ
+             }
+          } else {
+             // 影響範囲外に出たら元の軌道に戻る（徐々に戻す方が自然だが、簡易的に）
+             // p.distance = p.originalDistance;
+             p.speed = p.originalSpeed;
           }
-          if (dist < blackHole.radius + p.radius) {
-            planets.splice(i, 1);
-            continue;
-          }
+        } else {
+             // ブラックホール非アクティブ時は元の速度に戻す
+             p.speed = p.originalSpeed;
         }
 
+        // 惑星の軌道描画 (影響下にあるときは少し揺らす)
         ctx.beginPath();
-        ctx.arc(centerX, centerY, p.distance, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.ellipse(centerX, centerY, p.distance, p.distance, 0, 0, Math.PI * 2); // 正円軌道
+        ctx.strokeStyle = affectedByBlackHole ? `rgba(255, 100, 100, ${0.15 * blackHole.opacity})` : "rgba(255, 255, 255, 0.08)"; // 影響下なら赤っぽく
+        ctx.lineWidth = affectedByBlackHole ? 1.5 : 1;
         ctx.stroke();
 
+        // 惑星本体描画
         ctx.beginPath();
-        ctx.arc(x, y, p.radius, 0, Math.PI * 2);
+        ctx.arc(currentX, currentY, p.radius, 0, Math.PI * 2);
         ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color; // 惑星自身の色で発光
+        ctx.shadowBlur = p.radius * 1.5;
         ctx.fill();
+        ctx.shadowColor = "transparent"; // 影リセット
 
+        // 惑星ラベル
         ctx.fillStyle = "#ffffff";
         ctx.font = "11px sans-serif";
-        ctx.fillText(p.name, x + p.radius + 5, y + 4);
+        ctx.fillText(p.name, currentX + p.radius + 5, currentY + 4);
 
+        // 土星の輪を描画
+        if (p.ring) {
+            ctx.strokeStyle = p.ring.color;
+            ctx.lineWidth = 2; // 輪の太さ
+            ctx.beginPath();
+            ctx.save(); // 座標系を保存
+            ctx.translate(currentX, currentY); // 惑星の中心を原点に
+            ctx.rotate(0.3); // 輪を少し傾ける
+            ctx.scale(1, 0.4); // 楕円に見せるためにY軸を縮小
+            ctx.arc(0, 0, p.ring.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore(); // 座標系を元に戻す
+        }
+
+
+        // 月の更新・描画
         if (p.moons) {
           for (let j = p.moons.length - 1; j >= 0; j--) {
             const m = p.moons[j];
             m.angle += m.speed;
-            let mx = x + Math.cos(m.angle) * m.distance;
-            let my = y + Math.sin(m.angle) * m.distance;
+            let mx = currentX + Math.cos(m.angle) * m.distance;
+            let my = currentY + Math.sin(m.angle) * m.distance;
 
-            if (blackHole.active) {
+            // 月もブラックホールの影響を受ける (惑星より強く)
+            if (blackHole.active && blackHole.opacity > 0.1) {
               const dx_m = blackHole.x - mx;
               const dy_m = blackHole.y - my;
-              const dist_m = Math.sqrt(dx_m * dx_m + dy_m * dy_m);
-              if (dist_m < blackHole.attractionRadius * 0.5) {
-                const force_m = (blackHole.attractionRadius * 0.5 - dist_m) * 0.001;
+              const distSq_m = dx_m * dx_m + dy_m * dy_m;
+              // 月への影響範囲は惑星より少し狭いが、力は強くする
+              const pullRadiusSq_m = blackHole.attractionRadius * blackHole.attractionRadius * 0.8;
+
+              if (distSq_m < pullRadiusSq_m) {
+                const dist_m = Math.sqrt(distSq_m);
+                const forceFactor_m = (pullRadiusSq_m - distSq_m) / pullRadiusSq_m;
+                const force_m = forceFactor_m * blackHole.pullStrength * 1.5 * blackHole.opacity; // 惑星より強い力
+
                 mx += dx_m * force_m;
                 my += dy_m * force_m;
-                const dPlanetX = mx - x;
-                const dPlanetY = my - y;
+
+                // 新しい月と惑星間の距離と角度を計算
+                const dPlanetX = mx - currentX;
+                const dPlanetY = my - currentY;
                 m.distance = Math.sqrt(dPlanetX * dPlanetX + dPlanetY * dPlanetY);
                 m.angle = Math.atan2(dPlanetY, dPlanetX);
-              }
-              if (dist_m < blackHole.radius + m.radius) {
-                p.moons.splice(j, 1);
-                continue;
+
+                // ブラックホールに吸い込まれたら月を削除
+                if (dist_m < blackHole.radius + m.radius) {
+                    logEvent(`💥 ${p.name}の${m.name} がブラックホールに飲み込まれた！`);
+                    p.moons.splice(j, 1);
+                    continue; // 次の月へ
+                }
               }
             }
 
+            // 月の描画
             ctx.beginPath();
             ctx.arc(mx, my, m.radius, 0, Math.PI * 2);
             ctx.fillStyle = m.color;
@@ -357,40 +613,53 @@
         }
       }
 
-      if (meteor.active) {
-        meteor.x += meteor.speed;
-        if (meteor.x > canvas.width + meteor.radius * 2) {
-          meteor.active = false;
-        } else {
-          ctx.beginPath();
-          ctx.arc(meteor.x, meteor.y, meteor.radius, 0, Math.PI * 2);
-          ctx.fillStyle = "orange";
-          ctx.fill();
-        }
-      }
+       // 流星の描画
+       drawMeteor();
 
-      updateTime();
-    }
+       // 宇宙船の描画
+       drawSpaceship();
+
+       // 時間更新
+       updateTime();
+
+       // --- 状態管理 ---
+       // 全ての惑星がなくなったらリセット
+        if (planets.length === 0 && blackHole.opacity < 0.5) { // ブラックホールが消えかけたら再生成
+            logEvent("☄️ 銀河滅亡...新たな銀河を生成します。");
+            generatePlanets();
+            resetMeteor(); // 流星もリセット
+            // 宇宙船もリセットするかどうか（必要なら）
+            spaceship.active = false;
+        }
+
+    } // update関数の終わり
+
 
     function animate() {
       update();
       requestAnimationFrame(animate);
     }
 
-    animate();
+    // 初期化処理
+    generateStars(); // 星屑を生成
+    animate(); // アニメーション開始
 
+    // ウィンドウリサイズ時の処理
     window.addEventListener('resize', () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
       centerX = canvas.width / 2;
       centerY = canvas.height / 2;
-      update();
+      generateStars(); // リサイズ時にも星を再生成
+      // update(); // animateが常に回っているので不要な場合が多い
     });
 
+    // ページ離脱時のクリーンアップ
     window.addEventListener('unload', () => {
       if (blackHole.timeoutId) clearTimeout(blackHole.timeoutId);
+      // 他のタイマーがあればここでクリア
     });
+
   </script>
 </body>
 </html>
-
