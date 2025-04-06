@@ -1,161 +1,171 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>銀河系シミュレーター（7惑星）</title>
-  <style>
-    body {
-      margin: 0;
-      background: black;
-      overflow: hidden;
-      color: white;
-      font-family: sans-serif;
-    }
-    canvas {
-      display: block;
-      margin: 0 auto;
-      background: radial-gradient(circle at center, #000000 0%, #0a0a0a 80%, #111111 100%);
-      image-rendering: pixelated;
-    }
-    #timestamp {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-size: 16px;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 6px 12px;
-      border-radius: 8px;
-    }
-  </style>
-</head>
-<body>
-  <div id="timestamp">Loading...</div>
-  <canvas id="sim"></canvas>
-  <script>
-    const canvas = document.getElementById("sim");
-    const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+<script>
+  const canvas = document.getElementById("sim");
+  const ctx = canvas.getContext("2d");
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
 
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
 
-    const planets = [];
-    const colors = ["#a9a9a9", "#e0c16c", "#4fc3f7", "#ff7043", "#fbc02d", "#d1c4e9", "#80cbc4"];
-    const names = ["Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus"];
+  const planets = [];
+  const colors = ["#a9a9a9", "#e0c16c", "#4fc3f7", "#ff7043", "#fbc02d", "#d1c4e9", "#80cbc4"];
+  const names = ["Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus"];
 
-    for (let i = 0; i < 7; i++) {
-      const distance = 70 + i * 50;
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 0.008 + (i * 0.0015);
-      planets.push({
-        name: names[i],
-        angle,
-        distance,
-        speed,
-        radius: 4 + i * 1.5,
-        color: colors[i % colors.length],
-        rotation: 0,
-        rotationSpeed: 0.05 + Math.random() * 0.1
-      });
-    }
-
-    canvas.addEventListener("click", (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      for (const planet of planets) {
-        const x = centerX + Math.cos(planet.angle) * planet.distance;
-        const y = centerY + Math.sin(planet.angle) * planet.distance;
-        const dx = x - mouseX;
-        const dy = y - mouseY;
-        if (dx * dx + dy * dy < planet.radius * planet.radius * 4) {
-          alert(`🌍 惑星: ${planet.name}\n📏 距離: ${planet.distance}\n💫 速度: ${planet.speed.toFixed(3)}`);
-          break;
-        }
-      }
+  for (let i = 0; i < 7; i++) {
+    const distance = 70 + i * 50;
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.008 + (i * 0.0015);
+    planets.push({
+      name: names[i],
+      angle,
+      distance,
+      speed,
+      radius: 4 + i * 1.5,
+      color: colors[i % colors.length],
+      rotation: 0,
+      rotationSpeed: 0.05 + Math.random() * 0.1
     });
+  }
 
-    function drawGlow(x, y, r, color) {
-      const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
-      gradient.addColorStop(0, color);
-      gradient.addColorStop(1, "transparent");
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
+  canvas.addEventListener("click", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    for (const planet of planets) {
+      const x = centerX + Math.cos(planet.angle) * planet.distance;
+      const y = centerY + Math.sin(planet.angle) * planet.distance;
+      const dx = x - mouseX;
+      const dy = y - mouseY;
+      if (dx * dx + dy * dy < planet.radius * planet.radius * 4) {
+        alert(`🌍 惑星: ${planet.name}\n📏 距離: ${planet.distance}\n💫 速度: ${planet.speed.toFixed(3)}`);
+        break;
+      }
     }
+  });
 
-    const startDate = new Date("2025-01-01T00:00:00");
-    let elapsedDays = 0;
-    const timestampEl = document.getElementById("timestamp");
+  function drawGlow(x, y, r, color) {
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, "transparent");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
-    function updateTime() {
-      elapsedDays += 0.1; // 1フレームで0.1日進む（調整可）
-      const newDate = new Date(startDate.getTime() + elapsedDays * 86400000);
-      timestampEl.textContent = newDate.toDateString();
-    }
+  const startDate = new Date("2025-01-01T00:00:00");
+  let elapsedDays = 0;
+  const timestampEl = document.getElementById("timestamp");
 
-    function update() {
-      ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+  function updateTime() {
+    elapsedDays += 0.1;
+    const newDate = new Date(startDate.getTime() + elapsedDays * 86400000);
+    timestampEl.textContent = newDate.toDateString();
+  }
 
-      // draw center (sun)
-      drawGlow(centerX, centerY, 60, "rgba(255,255,150,0.3)");
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, 12, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffcc";
-      ctx.fill();
+  // 🌠 隕石オブジェクト
+  let meteor = {
+    x: -100,
+    y: Math.random() * canvas.height,
+    speed: 5,
+    active: true
+  };
 
-      for (const planet of planets) {
-        planet.angle += planet.speed;
-        planet.rotation += planet.rotationSpeed;
-        const x = centerX + Math.cos(planet.angle) * planet.distance;
-        const y = centerY + Math.sin(planet.angle) * planet.distance;
+  // ⏱️ 1分ごとに隕石リセット
+  setInterval(() => {
+    meteor = {
+      x: -100,
+      y: Math.random() * canvas.height,
+      speed: 5,
+      active: true
+    };
+  }, 60000); // 1分
 
-        // draw orbit
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, planet.distance, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-        ctx.stroke();
+  function update() {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // draw glow effect
-        drawGlow(x, y, planet.radius * 3, planet.color);
+    // ☀️ 太陽
+    drawGlow(centerX, centerY, 60, "rgba(255,255,150,0.3)");
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 12, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffcc";
+    ctx.fill();
 
-        // draw rotating indicator (self rotation)
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(planet.rotation);
-        ctx.beginPath();
-        ctx.arc(planet.radius - 1, 0, 1.5, 0, Math.PI * 2);
-        ctx.fillStyle = "#fff";
-        ctx.fill();
-        ctx.restore();
+    // 🌍 惑星
+    for (let i = planets.length - 1; i >= 0; i--) {
+      const planet = planets[i];
+      planet.angle += planet.speed;
+      planet.rotation += planet.rotationSpeed;
+      const x = centerX + Math.cos(planet.angle) * planet.distance;
+      const y = centerY + Math.sin(planet.angle) * planet.distance;
 
-        // draw planet
-        ctx.beginPath();
-        ctx.arc(x, y, planet.radius, 0, Math.PI * 2);
-        ctx.fillStyle = planet.color;
-        ctx.fill();
-
-        // draw name
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "12px sans-serif";
-        ctx.fillText(planet.name, x + planet.radius + 4, y);
+      // 🔥 隕石と衝突判定
+      if (
+        meteor.active &&
+        Math.abs(meteor.x - x) < planet.radius + 5 &&
+        Math.abs(meteor.y - y) < planet.radius + 5
+      ) {
+        planets.splice(i, 1); // 惑星を削除
+        continue;
       }
 
-      updateTime();
+      // 軌道
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, planet.distance, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+      ctx.stroke();
+
+      // 光
+      drawGlow(x, y, planet.radius * 3, planet.color);
+
+      // 自転
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(planet.rotation);
+      ctx.beginPath();
+      ctx.arc(planet.radius - 1, 0, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      ctx.restore();
+
+      // 惑星本体
+      ctx.beginPath();
+      ctx.arc(x, y, planet.radius, 0, Math.PI * 2);
+      ctx.fillStyle = planet.color;
+      ctx.fill();
+
+      // 名前
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(planet.name, x + planet.radius + 4, y);
     }
 
-    function animate() {
-      update();
-      requestAnimationFrame(animate);
+    // 🌠 隕石描画
+    if (meteor.active) {
+      ctx.beginPath();
+      ctx.arc(meteor.x, meteor.y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = "orange";
+      ctx.fill();
+
+      drawGlow(meteor.x, meteor.y, 30, "rgba(255,165,0,0.3)");
+
+      meteor.x += meteor.speed;
+
+      if (meteor.x > canvas.width + 100) {
+        meteor.active = false;
+      }
     }
 
-    animate();
-  </script>
-</body>
-</html>
+    updateTime();
+  }
+
+  function animate() {
+    update();
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+</script>
 
