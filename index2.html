@@ -53,8 +53,9 @@
 <body>
   <div class="battle-container">
     <div class="enemy">
-      <h2>シドー</h2>
+      <h2>ハーゴン</h2>
       <div class="sido">
+        <!-- ドット絵 -->
         <div class="pixel"></div><div class="pixel blue"></div><div class="pixel blue"></div><div class="pixel"></div><div class="pixel"></div><div class="pixel blue"></div><div class="pixel blue"></div><div class="pixel"></div>
         <div class="pixel blue"></div><div class="pixel red"></div><div class="pixel blue"></div><div class="pixel blue"></div><div class="pixel blue"></div><div class="pixel blue"></div><div class="pixel red"></div><div class="pixel blue"></div>
         <div class="pixel blue"></div><div class="pixel blue"></div><div class="pixel white"></div><div class="pixel blue"></div><div class="pixel blue"></div><div class="pixel white"></div><div class="pixel blue"></div><div class="pixel blue"></div>
@@ -64,53 +65,83 @@
         <div class="pixel"></div><div class="pixel blue"></div><div class="pixel blue"></div><div class="pixel"></div><div class="pixel"></div><div class="pixel blue"></div><div class="pixel blue"></div><div class="pixel"></div>
         <div class="pixel"></div><div class="pixel"></div><div class="pixel blue"></div><div class="pixel"></div><div class="pixel"></div><div class="pixel blue"></div><div class="pixel"></div><div class="pixel"></div>
       </div>
-      <p id="sido-status">HP: ???</p>
+      <p id="sido-status">HP: 255</p>
     </div>
 
-    <div class="status" id="party-status">
-      <p>ローレシア　HP: 90/90</p>
-      <p>サマルトリア HP: 70/70</p>
-      <p>ムーンブルク HP: 60/60</p>
-    </div>
+    <div class="status" id="party-status"></div>
 
     <div id="battle-log">
-      <p>シドーがあらわれた！</p>
+      <p>ハーゴンがあらわれた！</p>
     </div>
 
-    <div class="commands">
-      <button onclick="attack('ローレシア')">ローレシアのこうげき</button>
-      <button onclick="attack('サマルトリア')">サマルトリアのこうげき</button>
-      <button onclick="attack('ムーンブルク')">ムーンブルクのこうげき</button>
-    </div>
+    <div class="commands" id="command-buttons"></div>
   </div>
 
   <script>
-    let sidoHP = 300;
+    let sidoHP = 255;
+
+    const party = {
+      "ローレシア": { hp: 90, maxHp: 90 },
+      "サマルトリア": { hp: 70, maxHp: 70 },
+      "ムーンブルク": { hp: 60, maxHp: 60 }
+    };
+
+    function updatePartyStatus() {
+      const status = document.getElementById("party-status");
+      status.innerHTML = Object.entries(party).map(([name, data]) => {
+        return `<p>${name}　HP: ${data.hp}/${data.maxHp}</p>`;
+      }).join("");
+    }
+
+    function updateCommandButtons() {
+      const commands = document.getElementById("command-buttons");
+      commands.innerHTML = Object.entries(party).map(([name, data]) => {
+        if (data.hp <= 0) {
+          return `<button disabled>${name}は たおれている</button>`;
+        } else {
+          return `<button onclick="attack('${name}')">${name}のこうげき</button>`;
+        }
+      }).join("");
+    }
 
     function attack(character) {
+      if (party[character].hp <= 0) return;
+
       const damage = Math.floor(Math.random() * 20) + 10;
       sidoHP -= damage;
+      if (sidoHP < 0) sidoHP = 0;
+
       const log = document.getElementById("battle-log");
       log.innerHTML = `<p>${character}のこうげき！ ${damage}のダメージ！</p>` + log.innerHTML;
+      document.getElementById("sido-status").textContent = `HP: ${sidoHP}`;
 
       if (sidoHP <= 0) {
-        sidoHP = 0;
-        document.getElementById("sido-status").textContent = "HP: 0";
-        log.innerHTML = `<p>シドーをたおした！！</p>` + log.innerHTML;
-        document.querySelector(".commands").innerHTML = "<p>勝利！！</p>";
+        log.innerHTML = `<p>ハーゴンをたおした！！</p>` + log.innerHTML;
+        document.getElementById("command-buttons").innerHTML = "<p>勝利！！</p>";
       } else {
-        document.getElementById("sido-status").textContent = `HP: ???`;
         setTimeout(enemyTurn, 1000);
       }
     }
 
     function enemyTurn() {
-      const targets = ["ローレシア", "サマルトリア", "ムーンブルク"];
-      const target = targets[Math.floor(Math.random() * targets.length)];
+      const alive = Object.keys(party).filter(name => party[name].hp > 0);
+      if (alive.length === 0) return;
+
+      const target = alive[Math.floor(Math.random() * alive.length)];
       const damage = Math.floor(Math.random() * 25) + 5;
+      party[target].hp -= damage;
+      if (party[target].hp < 0) party[target].hp = 0;
+
       const log = document.getElementById("battle-log");
-      log.innerHTML = `<p>シドーのこうげき！ ${target}に${damage}のダメージ！</p>` + log.innerHTML;
+      log.innerHTML = `<p>ハーゴンのこうげき！ ${target}に${damage}のダメージ！</p>` + log.innerHTML;
+
+      updatePartyStatus();
+      updateCommandButtons();
     }
+
+    // 初期描画
+    updatePartyStatus();
+    updateCommandButtons();
   </script>
 </body>
 </html>
