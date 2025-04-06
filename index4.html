@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>銀河系シミュレーター（7惑星）</title>
+  <title>銀河系シミュレーター（ブラックホールあり）</title>
   <style>
     body {
       margin: 0;
@@ -67,23 +67,6 @@
 
     generatePlanets();
 
-    canvas.addEventListener("click", (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      for (const planet of planets) {
-        const x = centerX + Math.cos(planet.angle) * planet.distance;
-        const y = centerY + Math.sin(planet.angle) * planet.distance;
-        const dx = x - mouseX;
-        const dy = y - mouseY;
-        if (dx * dx + dy * dy < planet.radius * planet.radius * 4) {
-          alert(`🌍 惑星: ${planet.name}\n📏 距離: ${planet.distance}\n💫 速度: ${planet.speed.toFixed(3)}`);
-          break;
-        }
-      }
-    });
-
     function drawGlow(x, y, r, color) {
       const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
       gradient.addColorStop(0, color);
@@ -104,13 +87,11 @@
       timestampEl.textContent = newDate.toDateString();
     }
 
-    // 🌠 隕石名ジェネレーター
     function generateMeteorName() {
       const num = Math.floor(100 + Math.random() * 900);
       return "METEOR-" + num;
     }
 
-    // 🌠 隕石オブジェクト
     let meteor = {
       x: -100,
       y: Math.random() * canvas.height,
@@ -120,7 +101,6 @@
       name: generateMeteorName()
     };
 
-    // ⏱️ 10秒ごとに隕石リセット
     setInterval(() => {
       meteor.x = -100;
       meteor.y = Math.random() * canvas.height;
@@ -128,26 +108,63 @@
       meteor.name = generateMeteorName();
     }, 10000);
 
+    // 🌌 ブラックホール
+    let blackHole = {
+      x: 0,
+      y: 0,
+      radius: 30,
+      active: false,
+      angle: 0
+    };
+
+    function spawnBlackHole() {
+      blackHole.x = Math.random() * canvas.width;
+      blackHole.y = Math.random() * canvas.height;
+      blackHole.active = true;
+      blackHole.angle = 0;
+      setTimeout(() => {
+        blackHole.active = false;
+      }, 10000); // 10秒間だけ存在
+    }
+
+    setInterval(spawnBlackHole, 30000); // 30秒に1回出現
+
     function update() {
       ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // ☀️ 太陽描画
       drawGlow(centerX, centerY, 60, "rgba(255,255,150,0.3)");
       ctx.beginPath();
       ctx.arc(centerX, centerY, 12, 0, Math.PI * 2);
       ctx.fillStyle = "#ffffcc";
       ctx.fill();
 
-      // 🪐 惑星描画
+      // 惑星の描画と更新
       for (let i = planets.length - 1; i >= 0; i--) {
         const planet = planets[i];
         planet.angle += planet.speed;
         planet.rotation += planet.rotationSpeed;
-        const x = centerX + Math.cos(planet.angle) * planet.distance;
-        const y = centerY + Math.sin(planet.angle) * planet.distance;
+        let x = centerX + Math.cos(planet.angle) * planet.distance;
+        let y = centerY + Math.sin(planet.angle) * planet.distance;
 
-        // 💥 衝突判定
+        // ブラックホール吸引処理
+        if (blackHole.active) {
+          const dx = blackHole.x - x;
+          const dy = blackHole.y - y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 150) {
+            // 惑星を引き寄せる
+            x += dx * 0.02;
+            y += dy * 0.02;
+          }
+          if (dist < blackHole.radius + planet.radius) {
+            // 吸収
+            planets.splice(i, 1);
+            continue;
+          }
+        }
+
+        // 隕石との衝突判定
         if (meteor.active) {
           const dx = meteor.x - x;
           const dy = meteor.y - y;
@@ -158,6 +175,7 @@
           }
         }
 
+        // 惑星描画
         ctx.beginPath();
         ctx.arc(centerX, centerY, planet.distance, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
@@ -184,7 +202,7 @@
         ctx.fillText(planet.name, x + planet.radius + 4, y);
       }
 
-      // 🌠 隕石の描画と移動
+      // 隕石の描画
       if (meteor.active) {
         meteor.x += meteor.speed;
 
@@ -194,10 +212,25 @@
         ctx.fill();
         drawGlow(meteor.x, meteor.y, 30, "rgba(255,165,0,0.5)");
 
-        // 🔠 隕石の名前表示
         ctx.fillStyle = "white";
         ctx.font = "12px sans-serif";
         ctx.fillText(meteor.name, meteor.x + 12, meteor.y - 8);
+      }
+
+      // ブラックホール描画
+      if (blackHole.active) {
+        blackHole.angle += 0.05;
+        ctx.save();
+        ctx.translate(blackHole.x, blackHole.y);
+        ctx.rotate(blackHole.angle);
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blackHole.radius);
+        gradient.addColorStop(0, "black");
+        gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, blackHole.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
 
       updateTime();
