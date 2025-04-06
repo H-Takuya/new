@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>銀河系シミュレーター（ブラックホール吸引演出付き）</title>
+  <title>銀河系シミュレーター（演出強化版）</title>
   <style>
     body {
       margin: 0;
@@ -88,6 +88,14 @@
       attractionRadius: 200
     };
 
+    let spaceship = {
+      x: centerX,
+      y: centerY,
+      vx: 0,
+      vy: 0,
+      active: false
+    };
+
     function spawnBlackHole() {
       if (blackHole.timeoutId) clearTimeout(blackHole.timeoutId);
 
@@ -103,6 +111,13 @@
       blackHole.timeoutId = setTimeout(() => {
         blackHole.fadingOut = true;
       }, duration - 3000);
+
+      // 宇宙船逃走スタート
+      spaceship.x = centerX;
+      spaceship.y = centerY;
+      spaceship.vx = 2 + Math.random() * 2;
+      spaceship.vy = -2 - Math.random() * 2;
+      spaceship.active = true;
     }
 
     spawnBlackHole();
@@ -159,6 +174,28 @@
       meteor.active = true;
     }
 
+    function drawSpaceship() {
+      if (!spaceship.active) return;
+      spaceship.x += spaceship.vx;
+      spaceship.y += spaceship.vy;
+      if (spaceship.x > canvas.width || spaceship.y < 0) {
+        spaceship.active = false;
+        return;
+      }
+
+      ctx.save();
+      ctx.translate(spaceship.x, spaceship.y);
+      ctx.rotate(Math.atan2(spaceship.vy, spaceship.vx));
+      ctx.fillStyle = "white";
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-10, 3);
+      ctx.lineTo(-10, -3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
     function drawBlackHole() {
       if (!blackHole.active || blackHole.opacity <= 0) return;
 
@@ -208,19 +245,20 @@
         resetMeteor();
       }
 
-      // 背景薄くフェード
       ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 太陽グラデーション
-      const sunGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 20);
+      const pulse = 1 + 0.1 * Math.sin(Date.now() * 0.005);
+      const sunRadius = 20 * pulse;
+
+      const sunGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, sunRadius);
       sunGradient.addColorStop(0, "#ffffff");
       sunGradient.addColorStop(0.3, "#ffe066");
       sunGradient.addColorStop(0.6, "#ff9900");
       sunGradient.addColorStop(1, "#ff3300");
 
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 20, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
       ctx.fillStyle = sunGradient;
       ctx.fill();
 
@@ -244,6 +282,7 @@
       }
 
       drawBlackHole();
+      drawSpaceship();
 
       for (let i = planets.length - 1; i >= 0; i--) {
         const p = planets[i];
