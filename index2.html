@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>銀河系シミュレーター（完全版・高速＆グラフィック強化）</title>
+  <style>
+    body {
+      margin: 0;
+      background: radial-gradient(ellipse at center, #000010 0%, #000000 100%);
+      overflow: hidden;
+      color: white;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      cursor: crosshair;
+    }
+    #history {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      max-height: calc(100% - 30px);
+      overflow-y: auto;
+      font-size: 12px;
+      background: rgba(10, 10, 20, 0.6);
+      padding: 10px 15px;
+      border-radius: 5px;
+      white-space: pre-line;
+      color: rgba(200, 200, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      max-width: 320px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="history">シミュレーション履歴</div>
+  <canvas id="sim"></canvas>
+
+  <script>
+    const canvas = document.getElementById("sim");
+    const ctx = canvas.getContext("2d");
+    const historyEl = document.getElementById("history");
+
+    let canvasWidth = window.innerWidth;
+    let canvasHeight = window.innerHeight;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+
+    let centerX = canvasWidth / 2;
+    let centerY = canvasHeight / 2;
+
+    const startDate = new Date("2025-01-01T00:00:00");
+    let elapsedDays = 0;
+    let history = ["シミュレーション開始: " + startDate.toLocaleString()];
+    historyEl.textContent = history.join('\n');
+
+    const stars = Array.from({ length: 400 }, () => ({
+      x: Math.random() * canvasWidth,
+      y: Math.random() * canvasHeight,
+      radius: Math.random() * 1.5,
+      alpha: 0.3 + Math.random() * 0.7
+    }));
+
+    const planets = [
+      { name: "水星", color: "#a9a9a9", radius: 3, distance: 60, speed: 0.006 * 5, angle: 0 },
+      { name: "金星", color: "#e0c16c", radius: 4, distance: 100, speed: 0.0045 * 5, angle: 0 },
+      { name: "地球", color: "#4fc3f7", radius: 4.5, distance: 150, speed: 0.0035 * 5, angle: 0 },
+      { name: "火星", color: "#ff7043", radius: 3.5, distance: 210, speed: 0.0028 * 5, angle: 0 },
+      { name: "木星", color: "#fbc02d", radius: 8, distance: 300, speed: 0.0015 * 5, angle: 0 },
+      { name: "土星", color: "#d1c4e9", radius: 7, distance: 400, speed: 0.0010 * 5, angle: 0 },
+      { name: "天王星", color: "#80cbc4", radius: 6, distance: 500, speed: 0.0007 * 5, angle: 0 },
+      { name: "海王星", color: "#bcaaa4", radius: 5.8, distance: 600, speed: 0.0005 * 5, angle: 0 }
+    ];
+
+    let meteor = null;
+    let blackHole = null;
+
+    function logEvent(message) {
+      const now = new Date(startDate.getTime() + elapsedDays * 86400000);
+      const dateStr = now.toLocaleString();
+      history.unshift(`[${dateStr}] ${message}`);
+      if (history.length > 50) history.pop();
+      historyEl.textContent = history.join('\n');
+      historyEl.scrollTop = 0;
+    }
+
+    function drawStars() {
+      stars.forEach(s => {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
+        ctx.fill();
+      });
+    }
+
+    function drawSun() {
+      const pulse = 1 + 0.05 * Math.sin(Date.now() * 0.002);
+      const sunRadius = 25 * pulse;
+      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, sunRadius);
+      gradient.addColorStop(0, "#fff");
+      gradient.addColorStop(0.4, "#fff0a0");
+      gradient.addColorStop(0.8, "#ffcc00");
+      gradient.addColorStop(1, "#ff9900");
+      ctx.fillStyle = gradient;
+      ctx.shadowColor = "#ffff66";
+      ctx.shadowBlur = 50;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+    }
+
+    function drawPlanets() {
+      planets.forEach(p => {
+        p.angle += p.speed;
+        let x = centerX + Math.cos(p.angle) * p.distance;
+        let y = centerY + Math.sin(p.angle) * p.distance;
+
+        ctx.beginPath();
+        ctx.arc(x, y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+      });
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      elapsedDays += 0.05 * 5;
+      drawStars();
+      drawSun();
+      drawPlanets();
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', () => {
+      canvasWidth = window.innerWidth;
+      canvasHeight = window.innerHeight;
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      centerX = canvasWidth / 2;
+      centerY = canvasHeight / 2;
+    });
+
+    animate();
+  </script>
+</body>
+</html>
+

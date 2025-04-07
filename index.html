@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>銀河系シミュレーター（完全版・ズームなし）</title>
+  <title>銀河系シミュレーター（完全版・速度調整付き）</title>
   <style>
     body {
       margin: 0;
@@ -59,11 +59,30 @@
     #history::-webkit-scrollbar-thumb:hover {
       background: rgba(255,255,255,0.5);
     }
+    #controls {
+      position: fixed;
+      bottom: 15px;
+      left: 15px;
+      background: rgba(20, 20, 20, 0.7);
+      padding: 10px 15px;
+      border-radius: 5px;
+      color: white;
+      font-size: 14px;
+      z-index: 10;
+    }
+    #controls input[type="range"] {
+      width: 150px;
+      margin-left: 10px;
+    }
   </style>
 </head>
 <body>
   <div id="timestamp">Loading...</div>
   <div id="history">シミュレーション履歴</div>
+  <div id="controls">
+    <label for="speedSlider">速度: <span id="speedValue">1x</span></label>
+    <input type="range" id="speedSlider" min="0.1" max="5" step="0.1" value="1">
+  </div>
   <canvas id="sim"></canvas>
 
   <script>
@@ -71,6 +90,8 @@
     const ctx = canvas.getContext("2d");
     const timestampEl = document.getElementById("timestamp");
     const historyEl = document.getElementById("history");
+    const speedSlider = document.getElementById("speedSlider");
+    const speedValue = document.getElementById("speedValue");
 
     let canvasWidth = window.innerWidth;
     let canvasHeight = window.innerHeight;
@@ -82,6 +103,8 @@
 
     const startDate = new Date("2025-01-01T00:00:00");
     let elapsedDays = 0;
+    let timeSpeed = 1;
+
     let history = ["シミュレーション開始: " + startDate.toLocaleString()];
     historyEl.textContent = history.join('\n');
 
@@ -106,10 +129,15 @@
     let meteor = null;
     let blackHole = null;
 
+    speedSlider.addEventListener("input", () => {
+      timeSpeed = parseFloat(speedSlider.value);
+      speedValue.textContent = `${timeSpeed.toFixed(1)}x`;
+    });
+
     function updateTime() {
-      elapsedDays += 0.05;
+      elapsedDays += 0.05 * timeSpeed;
       const newDate = new Date(startDate.getTime() + elapsedDays * 86400000);
-      timestampEl.textContent = `日付: ${newDate.toLocaleDateString()} ${newDate.toLocaleTimeString()}`;
+      timestampEl.textContent = `${newDate.toLocaleDateString()} ${newDate.toLocaleTimeString()}`;
     }
 
     function logEvent(message) {
@@ -154,7 +182,7 @@
     function drawPlanets() {
       for (let i = planets.length - 1; i >= 0; i--) {
         const p = planets[i];
-        p.angle += p.speed;
+        p.angle += p.speed * timeSpeed;
         let x = centerX + Math.cos(p.angle) * p.distance;
         let y = centerY + Math.sin(p.angle) * p.distance;
 
@@ -207,8 +235,8 @@
 
     function drawMeteor() {
       if (!meteor) return;
-      meteor.x += Math.cos(meteor.angle) * meteor.speed;
-      meteor.y += Math.sin(meteor.angle) * meteor.speed;
+      meteor.x += Math.cos(meteor.angle) * meteor.speed * timeSpeed;
+      meteor.y += Math.sin(meteor.angle) * meteor.speed * timeSpeed;
       meteor.tail.push({ x: meteor.x, y: meteor.y, radius: meteor.radius });
       if (meteor.tail.length > 20) meteor.tail.shift();
 
@@ -268,7 +296,7 @@
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-      blackHole.angle += 0.01;
+      blackHole.angle += 0.01 * timeSpeed;
     }
 
     function animate() {
@@ -324,4 +352,3 @@
   </script>
 </body>
 </html>
-
