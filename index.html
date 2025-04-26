@@ -1,361 +1,98 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>銀河系シミュレーター（完全版・速度調整付き）</title>
+  <meta charset="UTF-8" />
+  <title>銀河系シミュレーター ✦ Minimal & Cinematic</title>
   <style>
-    body {
-      margin: 0;
-      background: black;
-      overflow: hidden;
-      color: white;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    canvas {
-      display: block;
-      margin: 0 auto;
-      cursor: crosshair;
-    }
-    #timestamp {
-      position: fixed;
-      top: 15px;
-      left: 15px;
-      color: #e0e0e0;
-      font-size: 18px;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 8px 15px;
-      border-radius: 5px;
-      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-      z-index: 10;
-    }
-    #history {
-      position: fixed;
-      top: 15px;
-      right: 15px;
-      max-height: calc(100% - 30px);
-      overflow-y: auto;
-      font-size: 12px;
-      background: rgba(10, 10, 20, 0.6);
-      padding: 10px 15px;
-      border-radius: 5px;
-      white-space: pre-line;
-      color: rgba(200, 200, 255, 0.8);
-      font-style: normal;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      max-width: 320px;
-      z-index: 10;
-    }
-    #history::-webkit-scrollbar {
-      width: 5px;
-    }
-    #history::-webkit-scrollbar-track {
-      background: rgba(0,0,0,0.3);
-      border-radius: 5px;
-    }
-    #history::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,0.3);
-      border-radius: 5px;
-    }
-    #history::-webkit-scrollbar-thumb:hover {
-      background: rgba(255,255,255,0.5);
-    }
-    #controls {
-      position: fixed;
-      bottom: 15px;
-      left: 15px;
-      background: rgba(20, 20, 20, 0.7);
-      padding: 10px 15px;
-      border-radius: 5px;
-      color: white;
-      font-size: 14px;
-      z-index: 10;
-    }
-    #controls input[type="range"] {
-      width: 150px;
-      margin-left: 10px;
-    }
+    html,body{height:100%;margin:0;overflow:hidden;background:#000;}
+    canvas{display:block;width:100%;height:100%;cursor:crosshair}
   </style>
 </head>
 <body>
-  <div id="timestamp">Loading...</div>
-  <div id="history">シミュレーション履歴</div>
-  <div id="controls">
-    <label for="speedSlider">速度: <span id="speedValue">1x</span></label>
-    <input type="range" id="speedSlider" min="0.1" max="5" step="0.1" value="1">
-  </div>
   <canvas id="sim"></canvas>
-
   <script>
-    const canvas = document.getElementById("sim");
-    const ctx = canvas.getContext("2d");
-    const timestampEl = document.getElementById("timestamp");
-    const historyEl = document.getElementById("history");
-    const speedSlider = document.getElementById("speedSlider");
-    const speedValue = document.getElementById("speedValue");
+    /*––––– CANVAS SETUP –––––*/
+    const canvas=document.getElementById('sim');
+    const ctx=canvas.getContext('2d');
+    const DPR=window.devicePixelRatio||1;
+    let W,H,CX,CY;
+    const resize=()=>{W=window.innerWidth;H=window.innerHeight;CX=W/2;CY=H/2;
+      canvas.width=W*DPR;canvas.height=H*DPR;canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);
+    };resize();window.addEventListener('resize',resize);
 
-    let canvasWidth = window.innerWidth;
-    let canvasHeight = window.innerHeight;
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+    /*––––– UTILITIES –––––*/
+    const rand=(a,b)=>Math.random()*(b-a)+a;
+    const TAU=Math.PI*2;
 
-    let centerX = canvasWidth / 2;
-    let centerY = canvasHeight / 2;
+    /*––––– STATIC STARFIELD –––––*/
+    const backgroundStars=Array.from({length:300},()=>({
+      x:rand(0,W),y:rand(0,H),r:rand(.2,1.6),phase:rand(0,TAU),spd:rand(.4,1.2),baseA:rand(.2,.9)
+    }));
 
-    const startDate = new Date("2025-01-01T00:00:00");
-    let elapsedDays = 0;
-    let timeSpeed = 1;
+    /*––––– DYNAMIC GALACTIC DISK –––––*/
+    const spiralStars=[]; // stars in spiral arms
+    const ARM_COUNT=3, STAR_PER_ARM=450;
+    for(let a=0;a<ARM_COUNT;a++){
+      for(let i=0;i<STAR_PER_ARM;i++){
+        const radius=i/STAR_PER_ARM*600*rand(.6,1.2);
+        const angle=a*(TAU/ARM_COUNT)+radius*0.03+rand(-.1,.1);
+        spiralStars.push({r:radius,theta:angle,speed:rand(.0004,.0009),size:rand(.6,1.8),hue:rand(180,260)});
+      }
+    }
 
-    let history = ["シミュレーション開始: " + startDate.toLocaleString()];
-    historyEl.textContent = history.join('\n');
-
-
-    const planets = [
-      { name: "水星", color: "#a9a9a9", radius: 3, distance: 60, speed: 0.006, angle: 0 },
-      { name: "金星", color: "#e0c16c", radius: 4, distance: 100, speed: 0.0045, angle: 0 },
-      { name: "地球", color: "#4fc3f7", radius: 4.5, distance: 150, speed: 0.0035, angle: 0 },
-      { name: "火星", color: "#ff7043", radius: 3.5, distance: 210, speed: 0.0028, angle: 0 },
-      { name: "木星", color: "#fbc02d", radius: 8, distance: 300, speed: 0.0015, angle: 0 },
-      { name: "土星", color: "#d1c4e9", radius: 7, distance: 400, speed: 0.0010, angle: 0 },
-      { name: "天王星", color: "#80cbc4", radius: 6, distance: 500, speed: 0.0007, angle: 0 },
-      { name: "海王星", color: "#bcaaa4", radius: 5.8, distance: 600, speed: 0.0005, angle: 0 }
+    /*––––– PLANETS & SUN –––––*/
+    class Body{constructor(o){Object.assign(this,o);} pos(){return {x:CX+Math.cos(this.a)*this.d,y:CY+Math.sin(this.a)*this.d};}}
+    const planets=[
+      new Body({n:'水星',c:'#a9a9a9',sz:3,d:60 ,spd:.006,a:0}),
+      new Body({n:'金星',c:'#e0c16c',sz:4,d:100,spd:.0045,a:0}),
+      new Body({n:'地球',c:'#4fc3f7',sz:4.5,d:150,spd:.0035,a:0}),
+      new Body({n:'火星',c:'#ff7043',sz:3.5,d:210,spd:.0028,a:0}),
+      new Body({n:'木星',c:'#fbc02d',sz:8 ,d:300,spd:.0015,a:0}),
+      new Body({n:'土星',c:'#d1c4e9',sz:7 ,d:400,spd:.001 ,a:0}),
+      new Body({n:'天王星',c:'#80cbc4',sz:6 ,d:500,spd:.0007,a:0}),
+      new Body({n:'海王星',c:'#bcaaa4',sz:5.8,d:600,spd:.0005,a:0})
     ];
 
-    const stars = Array.from({ length: 200 }, () => ({
-  x: Math.random() * canvasWidth,
-  y: Math.random() * canvasHeight,
-  radius: Math.random() * 1.5,
-  baseAlpha: 0.3 + Math.random() * 0.7,
-  alpha: 0,
-  twinkleSpeed: 0.5 + Math.random() * 1.5,
-  phase: Math.random() * Math.PI * 2
-}));
+    /*––––– METEOR & SUPERNOVA –––––*/
+    let meteor=null, supernova=null;
+    function spawnMeteor(){meteor={x:-100,y:rand(0,H),v:rand(4,8),a:rand(-.1,.1),r:rand(4,6),tail:[]};}
+    function triggerSupernova(){supernova={x:rand(CX-300,CX+300),y:rand(CY-300,CY+300),t:0};}
+    setInterval(spawnMeteor,10000);setInterval(triggerSupernova,25000);
 
+    /*––––– MAIN LOOP –––––*/
+    let last=performance.now();
+    function loop(now){const dt=Math.min((now-last)/1000,0.033);last=now;ctx.clearRect(0,0,W,H);
 
-    let meteor = null;
-    let blackHole = null;
+      // background stars
+      backgroundStars.forEach(s=>{const a=s.baseA*(.5+.5*Math.sin(now*0.001*s.spd+s.phase));ctx.fillStyle=`rgba(255,255,255,${a})`;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,TAU);ctx.fill();});
 
-    speedSlider.addEventListener("input", () => {
-      timeSpeed = parseFloat(speedSlider.value);
-      speedValue.textContent = `${timeSpeed.toFixed(1)}x`;
-    });
+      // spiral arms
+      spiralStars.forEach(s=>{s.theta+=s.speed;const x=CX+Math.cos(s.theta)*s.r,y=CY+Math.sin(s.theta)*s.r;
+        ctx.fillStyle=`hsl(${s.hue},60%,85%)`;ctx.beginPath();ctx.arc(x,y,s.size,0,TAU);ctx.fill();});
 
-    function updateTime() {
-      elapsedDays += 0.05 * timeSpeed;
-      const newDate = new Date(startDate.getTime() + elapsedDays * 86400000);
-      timestampEl.textContent = `${newDate.toLocaleDateString()} ${newDate.toLocaleTimeString()}`;
-    }
+      // Sun
+      const pulse=1+0.05*Math.sin(now*0.002),sunR=20*pulse;const g=ctx.createRadialGradient(CX,CY,0,CX,CY,sunR);
+      g.addColorStop(0,'#fff');g.addColorStop(.4,'#fff4b0');g.addColorStop(.8,'#ffca28');g.addColorStop(1,'#ff9800');ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(CX,CY,sunR,0,TAU);ctx.fill();
 
-    function logEvent(message) {
-      const now = new Date(startDate.getTime() + elapsedDays * 86400000);
-      const dateStr = now.toLocaleString();
-      history.unshift(`[${dateStr}] ${message}`);
-      if (history.length > 50) history.pop();
-      historyEl.textContent = history.join('\n');
-      historyEl.scrollTop = 0;
-    }
+      // planets
+      planets.forEach(p=>{p.a+=p.spd;const {x,y}=p.pos();ctx.fillStyle=p.c;
+        ctx.beginPath();ctx.arc(x,y,p.sz,0,TAU);ctx.fill();});
 
-    function drawStars() {
-  const time = Date.now() * 0.001;
-  stars.forEach(s => {
-    s.alpha = s.baseAlpha * (0.5 + 0.5 * Math.sin(time * s.twinkleSpeed + s.phase));
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
-    ctx.fill();
-  });
-}
+      // meteor
+      if(meteor){meteor.x+=Math.cos(meteor.a)*meteor.v;meteor.y+=Math.sin(meteor.a)*meteor.v;meteor.tail.push({x:meteor.x,y:meteor.y});if(meteor.tail.length>25)meteor.tail.shift();
+        // draw tail
+        meteor.tail.forEach((pt,i)=>{const alpha=i/meteor.tail.length*.5;ctx.fillStyle=`rgba(255,165,0,${alpha})`;ctx.beginPath();ctx.arc(pt.x,pt.y,meteor.r*(i/meteor.tail.length),0,TAU);ctx.fill();});
+        // head
+        const headGrad=ctx.createRadialGradient(meteor.x,meteor.y,0,meteor.x,meteor.y,meteor.r);headGrad.addColorStop(0,'#fff');headGrad.addColorStop(1,'orange');ctx.fillStyle=headGrad;ctx.beginPath();ctx.arc(meteor.x,meteor.y,meteor.r,0,TAU);ctx.fill();
+        // remove if off screen
+        if(meteor.x>W+120||meteor.y>H+120||meteor.x<-120||meteor.y<-120)meteor=null;}
 
-    function drawSun() {
-      const pulse = 1 + 0.05 * Math.sin(Date.now() * 0.002);
-      const sunRadius = 20 * pulse;
-      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, sunRadius);
-      gradient.addColorStop(0, "#ffffff");
-      gradient.addColorStop(0.4, "#fff0a0");
-      gradient.addColorStop(0.8, "#ffcc00");
-      gradient.addColorStop(1, "#ff9900");
-      ctx.fillStyle = gradient;
-      ctx.shadowColor = "yellow";
-      ctx.shadowBlur = 30 * pulse;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowColor = "transparent";
-      ctx.fillStyle = "#fff";
-      ctx.font = "14px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("太陽", centerX, centerY + sunRadius + 20);
-    }
+      // supernova
+      if(supernova){supernova.t+=dt;const t=supernova.t;const radius=10+200*t;const alpha=Math.max(1-t,0);if(alpha>0){ctx.strokeStyle=`rgba(255,255,0,${alpha})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(supernova.x,supernova.y,radius,0,TAU);ctx.stroke();} else supernova=null;}
 
-    function drawPlanets() {
-      for (let i = planets.length - 1; i >= 0; i--) {
-        const p = planets[i];
-        p.angle += p.speed * timeSpeed;
-        let x = centerX + Math.cos(p.angle) * p.distance;
-        let y = centerY + Math.sin(p.angle) * p.distance;
-
-        if (blackHole) {
-          const dx = blackHole.x - x;
-          const dy = blackHole.y - y;
-          const distSq = dx * dx + dy * dy;
-          const pullRadiusSq = 300 * 300;
-          if (distSq < pullRadiusSq) {
-            const dist = Math.sqrt(distSq);
-            const force = (pullRadiusSq - distSq) / pullRadiusSq * 0.5;
-            x += dx * force * 0.05;
-            y += dy * force * 0.05;
-            p.distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
-            if (dist < blackHole.radius + p.radius) {
-              logEvent(`💥 ${p.name} がブラックホールに吸い込まれた`);
-              planets.splice(i, 1);
-              continue;
-            }
-          }
-        }
-
-        if (meteor) {
-          const dx = meteor.x - x;
-          const dy = meteor.y - y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < meteor.radius + p.radius) {
-            logEvent(`☄️ メテオが ${p.name} に衝突！`);
-            planets.splice(i, 1);
-            meteor = null;
-            continue;
-          }
-        }
-
-        ctx.beginPath();
-        ctx.ellipse(centerX, centerY, p.distance, p.distance, 0, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(x, y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.fill();
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "10px sans-serif";
-        ctx.fillText(p.name, x + p.radius + 2, y);
-      }
-    }
-
-    function drawMeteor() {
-      if (!meteor) return;
-      meteor.x += Math.cos(meteor.angle) * meteor.speed * timeSpeed;
-      meteor.y += Math.sin(meteor.angle) * meteor.speed * timeSpeed;
-      meteor.tail.push({ x: meteor.x, y: meteor.y, radius: meteor.radius });
-      if (meteor.tail.length > 20) meteor.tail.shift();
-
-      const dx = meteor.x - centerX;
-      const dy = meteor.y - centerY;
-      const sunRadius = 20 * (1 + 0.05 * Math.sin(Date.now() * 0.002));
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < sunRadius + meteor.radius) {
-        logEvent("☄️ メテオが太陽に衝突し蒸発した");
-        meteor = null;
-        return;
-      }
-
-      if (meteor.x > canvasWidth + 100 || meteor.y > canvasHeight + 100 || meteor.y < -100) {
-        meteor = null;
-        return;
-      }
-
-      for (let i = 0; i < meteor.tail.length; i++) {
-        const point = meteor.tail[i];
-        const alpha = (i / meteor.tail.length) * 0.5;
-        const radius = point.radius * (i / meteor.tail.length);
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 165, 0, ${alpha})`;
-        ctx.fill();
-      }
-      ctx.beginPath();
-      const grad = ctx.createRadialGradient(meteor.x, meteor.y, 0, meteor.x, meteor.y, meteor.radius);
-      grad.addColorStop(0, "white");
-      grad.addColorStop(1, "orange");
-      ctx.fillStyle = grad;
-      ctx.arc(meteor.x, meteor.y, meteor.radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    function drawBlackHole() {
-      if (!blackHole) return;
-      ctx.save();
-      ctx.translate(blackHole.x, blackHole.y);
-      ctx.rotate(blackHole.angle);
-      const r = blackHole.radius;
-      const disk = r * 3;
-      const grad = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, disk);
-      grad.addColorStop(0, "rgba(0,0,0,0)");
-      grad.addColorStop(0.4, "rgba(255,0,0,0.2)");
-      grad.addColorStop(0.8, "rgba(0,0,255,0.2)");
-      grad.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(0, 0, disk, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "black";
-      ctx.shadowColor = "purple";
-      ctx.shadowBlur = 20;
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      blackHole.angle += 0.01 * timeSpeed;
-    }
-
-    function animate() {
-      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-      updateTime();
-      drawStars();
-      drawSun();
-      drawPlanets();
-      drawMeteor();
-      drawBlackHole();
-      requestAnimationFrame(animate);
-    }
-
-    function spawnMeteor() {
-      meteor = {
-        x: -100,
-        y: Math.random() * canvasHeight,
-        speed: 4 + Math.random() * 4,
-        radius: 4 + Math.random() * 4,
-        angle: Math.PI / 8,
-        tail: []
-      };
-    }
-
-    function spawnBlackHole() {
-      if (blackHole) return;
-      blackHole = {
-        x: Math.random() * canvasWidth * 0.8 + canvasWidth * 0.1,
-        y: Math.random() * canvasHeight * 0.8 + canvasHeight * 0.1,
-        radius: 20 + Math.random() * 10,
-        angle: 0
-      };
-      logEvent("🕳️ ブラックホール出現");
-      setTimeout(() => {
-        blackHole = null;
-        logEvent("⚫ ブラックホール消滅");
-      }, 10000);
-    }
-
-    setInterval(spawnMeteor, 10000);
-    setInterval(spawnBlackHole, 20000);
-
-    window.addEventListener('resize', () => {
-      canvasWidth = window.innerWidth;
-      canvasHeight = window.innerHeight;
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      centerX = canvasWidth / 2;
-      centerY = canvasHeight / 2;
-    });
-
-    animate();
+      requestAnimationFrame(loop);
+    }requestAnimationFrame(loop);
   </script>
 </body>
 </html>
