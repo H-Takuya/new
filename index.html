@@ -1,46 +1,39 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>銀河系シミュレーター ✦ Physics Extended</title>
-  <style>
-    html,body{height:100%;margin:0;background:#000;overflow:hidden}
-    canvas{display:block;width:100%;height:100%;cursor:crosshair}
-  </style>
+<meta charset="UTF-8" />
+<title>銀河系シミュレーター ✦ N‑Body & Fragmentation</title>
+<style>
+  html,body{height:100%;margin:0;background:#000;overflow:hidden}
+  canvas{display:block;width:100%;height:100%;cursor:crosshair}
+  #log{position:fixed;top:10px;right:10px;max-width:320px;max-height:90vh;overflow-y:auto;font:12px/1.4 monospace;background:rgba(10,10,20,.6);color:#cce;border:1px solid rgba(255,255,255,.15);padding:8px 10px;border-radius:6px;white-space:pre-line;pointer-events:none}
+  #log::-webkit-scrollbar{width:5px}#log::-webkit-scrollbar-thumb{background:rgba(255,255,255,.3);border-radius:5px}
+</style>
 </head>
 <body>
 <canvas id="sim"></canvas>
+<div id="log"></div>
 <script>
-/*––––– CANVAS –––––*/
-const cvs=document.getElementById('sim');const ctx=cvs.getContext('2d');const DPR=window.devicePixelRatio||1;
-let W,H,CX,CY;function resize(){W=window.innerWidth;H=window.innerHeight;CX=W/2;CY=H/2;cvs.width=W*DPR;cvs.height=H*DPR;cvs.style.width=W+'px';cvs.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}resize();window.addEventListener('resize',resize);
+/*––––– CANVAS SETUP –––––*/
+const cvs=document.getElementById('sim'),ctx=cvs.getContext('2d'),DPR=window.devicePixelRatio||1;
+let W,H,CX,CY;function resize(){W=innerWidth;H=innerHeight;CX=W/2;CY=H/2;cvs.width=W*DPR;cvs.height=H*DPR;cvs.style.width=W+'px';cvs.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}resize();addEventListener('resize',resize);
 const TAU=Math.PI*2,rand=(a,b)=>Math.random()*(b-a)+a;
 
-/*––––– BACKGROUND STARFIELD –––––*/
-const bgStars=Array.from({length:350},()=>({x:rand(0,W),y:rand(0,H),r:rand(.2,1.5),aBase:rand(.2,.9),ph:rand(0,TAU),spd:rand(.4,1.2)}));
+/*––––– LOG PANEL –––––*/
+const logEl=document.getElementById('log');const logs=[];function addLog(msg){const t=new Date().toLocaleTimeString('ja-JP',{hour12:false});logs.unshift(`[${t}] ${msg}`);if(logs.length>60)logs.pop();logEl.textContent=logs.join('\n');logEl.scrollTop=0;}
 
-/*––––– SPIRAL GALACTIC DISK –––––*/
-const spiralStars=[];const ARMS=3,STAR_PER_ARM=480;for(let arm=0;arm<ARMS;arm++)for(let i=0;i<STAR_PER_ARM;i++){const R=i/STAR_PER_ARM*700*rand(.6,1.15),theta=arm*(TAU/ARMS)+R*0.028+rand(-.12,.12);spiralStars.push({R,theta,size:rand(.6,1.8),h:rand(180,260),spd:rand(.0003,.0007)});}
+/*––––– BACKGROUND & DISK –––––*/
+const bgStars=Array.from({length:350},()=>({x:rand(0,1),y:rand(0,1),r:rand(.2,1.4),a:rand(.3,.9),ph:rand(0,TAU),s:rand(.4,1.2)}));
+const disk=[];const ARMS=3,STAR_PER_ARM=480;for(let a=0;a<ARMS;a++)for(let i=0;i<STAR_PER_ARM;i++){const R=i/STAR_PER_ARM*700*rand(.6,1.15);const th=a*(TAU/ARMS)+R*0.028+rand(-.12,.12);disk.push({R,th,sz:rand(.6,1.8),h:rand(180,260),spd:rand(.0003,.0007)});}
 
-/*––––– GRAVITY SYSTEM –––––*/
-const G=0.00025; // tuned gravitational constant (pixel^3 / mass / frame^2)
+/*––––– PHYSICS –––––*/
+const G=0.00020; // tuned constant
 class Body{
-  constructor({name,color,mass,radius,dist}){
-    this.name=name;this.color=color;this.m=mass;this.r=radius;
-    const angle=rand(0,TAU);this.x=CX+Math.cos(angle)*dist;this.y=CY+Math.sin(angle)*dist;
-    const v=Math.sqrt(G*SUN.m/dist); // circular orbit speed
-    this.vx=-Math.sin(angle)*v;this.vy=Math.cos(angle)*v;
-  }
-  step(dt){
-    const dx=CX-this.x,dy=CY-this.y,dist2=dx*dx+dy*dy,dist=Math.sqrt(dist2);
-    const a=G*SUN.m/dist2;
-    this.vx+=a*dx/dist*dt;this.vy+=a*dy/dist*dt;
-    this.x+=this.vx*dt;this.y+=this.vy*dt;
-  }
-  draw(){ctx.fillStyle=this.color;ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,TAU);ctx.fill();}
+  constructor({name,color,mass,radius,x,y,vx,vy}){this.name=name;this.c=color;this.m=mass;this.r=radius;this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.isFragment=!name;}
 }
-const SUN={m:1e6,r:25,draw(){const t=performance.now()*0.002,p=1+0.05*Math.sin(t);const R=this.r*p;const g=ctx.createRadialGradient(CX,CY,0,CX,CY,R);g.addColorStop(0,'#fff');g.addColorStop(.4,'#fff5b5');g.addColorStop(.8,'#ffca28');g.addColorStop(1,'#ff9800');ctx.fillStyle=g;ctx.beginPath();ctx.arc(CX,CY,R,0,TAU);ctx.fill();}};
-const planets=[
+const SUN={x:()=>CX,y:()=>CY,m:1e7,r:30,draw(){const t=performance.now()*0.002,p=1+0.06*Math.sin(t);const R=this.r*p;const g=ctx.createRadialGradient(CX,CY,0,CX,CY,R);g.addColorStop(0,'#fff');g.addColorStop(.4,'#fff6b5');g.addColorStop(.8,'#ffca28');g.addColorStop(1,'#ff9800');ctx.fillStyle=g;ctx.beginPath();ctx.arc(CX,CY,R,0,TAU);ctx.fill();}};
+
+function spawnPlanetSet(){const data=[
   {n:'水星',c:'#a9a9a9',m:3, r:3 ,d:70},
   {n:'金星',c:'#e0c16c',m:5, r:4 ,d:110},
   {n:'地球',c:'#4fc3f7',m:6, r:4.5,d:160},
@@ -49,39 +42,39 @@ const planets=[
   {n:'土星',c:'#d1c4e9',m:95, r:7 ,d:430},
   {n:'天王星',c:'#80cbc4',m:14, r:6 ,d:530},
   {n:'海王星',c:'#bcaaa4',m:17, r:5.8,d:620}
-].map(p=>new Body({name:p.n,color:p.c,mass:p.m,radius:p.r,dist:p.d}));
+];return data.map(p=>{const ang=rand(0,TAU),x=CX+Math.cos(ang)*p.d,y=CY+Math.sin(ang)*p.d;const v=Math.sqrt(G*SUN.m/p.d);const vx=-Math.sin(ang)*v,vy=Math.cos(ang)*v;return new Body({name:p.n,color:p.c,mass:p.m,radius:p.r,x,y,vx,vy});});}
+let bodies=spawnPlanetSet();
 
-/*––––– METEOR & SUPERNOVA –––––*/
-let meteor=null,supernova=null;function spawnMeteor(){meteor={x:-80,y:rand(0,H),vx:rand(4,7),vy:rand(-2,2),r:rand(4,6),trail:[]};}
-function triggerSupernova(){supernova={x:rand(CX-300,CX+300),y:rand(CY-300,CY+300),t:0};}
-setInterval(spawnMeteor,12000);setInterval(triggerSupernova,28000);
-
-/*––––– STAR BIRTH –––––*/
-const newborns=[];function spawnStarBirth(){const arm=rand(0,ARMS),d=rand(200,600),theta=arm*(TAU/ARMS)+d*0.03+rand(-.1,.1);const x=CX+Math.cos(theta)*d,y=CY+Math.sin(theta)*d;newborns.push({x,y,t:0});}
-setInterval(spawnStarBirth,18000);
+/*––––– FRAGMENTATION –––––*/
+function fragment(b1,b2){const parts=6;const totalMass=b1.m+b2.m;const fragMass=totalMass/parts;const angleBase=Math.atan2(b1.y-b2.y,b1.x-b2.x);
+  for(let i=0;i<parts;i++){
+    const ang=angleBase+rand(-.6,.6);const speed=rand(1,3);
+    bodies.push(new Body({color:'#ccc',mass:fragMass,radius:2,x:(b1.x+b2.x)/2,y:(b1.y+b2.y)/2,vx:Math.cos(ang)*speed,vy:Math.sin(ang)*speed}));
+  }
+  addLog(`⚠️ ${b1.name||'Fragment'} と ${b2.name||'Fragment'} が衝突し破片化`);
+}
 
 /*––––– LOOP –––––*/
-let last=performance.now();function loop(now){const dt=Math.min((now-last)/16,2);last=now;ctx.clearRect(0,0,W,H);
-  // BG stars
-  bgStars.forEach(s=>{const a=s.aBase*(.5+.5*Math.sin(now*0.001*s.spd+s.ph));ctx.fillStyle=`rgba(255,255,255,${a})`;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,TAU);ctx.fill();});
-  // spiral arms motion
-  spiralStars.forEach(s=>{s.theta+=s.spd*dt;const x=CX+Math.cos(s.theta)*s.R,y=CY+Math.sin(s.theta)*s.R;ctx.fillStyle=`hsl(${s.h},65%,85%)`;ctx.beginPath();ctx.arc(x,y,s.size,0,TAU);ctx.fill();});
-  // Sun
+let last=performance.now();function loop(now){const dt=Math.min((now-last)/16,3);last=now;ctx.clearRect(0,0,W,H);
+  // BG
+  bgStars.forEach(s=>{const a=s.a*(.5+.5*Math.sin(now*0.001*s.s+s.ph));ctx.fillStyle=`rgba(255,255,255,${a})`;ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,TAU);ctx.fill();});
+  disk.forEach(s=>{s.th+=s.spd*dt;const x=CX+Math.cos(s.th)*s.R,y=CY+Math.sin(s.th)*s.R;ctx.fillStyle=`hsl(${s.h},65%,85%)`;ctx.beginPath();ctx.arc(x,y,s.sz,0,TAU);ctx.fill();});
   SUN.draw();
-  // planets physics
-  planets.forEach(p=>{p.step(dt);p.draw();});
-  // meteor
-  if(meteor){meteor.x+=meteor.vx*dt;meteor.y+=meteor.vy*dt;meteor.trail.push({x:meteor.x,y:meteor.y});if(meteor.trail.length>30)meteor.trail.shift();
-    meteor.trail.forEach((pt,i)=>{ctx.fillStyle=`rgba(255,140,0,${i/meteor.trail.length*.6})`;ctx.beginPath();ctx.arc(pt.x,pt.y,meteor.r*(i/meteor.trail.length),0,TAU);ctx.fill();});
-    const grad=ctx.createRadialGradient(meteor.x,meteor.y,0,meteor.x,meteor.y,meteor.r);grad.addColorStop(0,'#fff');grad.addColorStop(1,'orange');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(meteor.x,meteor.y,meteor.r,0,TAU);ctx.fill();
-    if(meteor.x>W+120||meteor.y>H+120||meteor.x<-120||meteor.y<-120)meteor=null;}
-  // supernova
-  if(supernova){supernova.t+=0.015*dt;const alpha=Math.max(1-supernova.t,0);if(alpha>0){ctx.strokeStyle=`rgba(255,255,128,${alpha})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(supernova.x,supernova.y,50+250*supernova.t,0,TAU);ctx.stroke();}else supernova=null;}
-  // star births
-  for(let i=newborns.length-1;i>=0;i--){const nb=newborns[i];nb.t+=0.02*dt;const a=1-nb.t;if(a>0){ctx.fillStyle=`rgba(255,255,255,${a})`;ctx.beginPath();ctx.arc(nb.x,nb.y,2+10*nb.t,0,TAU);ctx.fill();}else{spiralStars.push({R:Math.hypot(nb.x-CX,nb.y-CY),theta:Math.atan2(nb.y-CY,nb.x-CX),size:rand(.5,1.6),h:rand(190,250),spd:rand(.0003,.0007)});newborns.splice(i,1);} }
+  // Physics forces (N‑body)
+  for(let i=0;i<bodies.length;i++){
+    const bi=bodies[i]; // sun gravity
+    const dx=CX-bi.x,dy=CY-bi.y,dist2=dx*dx+dy*dy;const f=G*SUN.m/dist2;const d=Math.sqrt(dist2);bi.vx+=f*dx/d*dt;bi.vy+=f*dy/d*dt;
+    for(let j=i+1;j<bodies.length;j++){
+      const bj=bodies[j];const dx2=bj.x-bi.x,dy2=bj.y-bi.y,distSq=dx2*dx2+dy2*dy2,dist=Math.sqrt(distSq);
+      if(dist<bi.r+bj.r){ // collision
+        fragment(bi,bj);bodies.splice(j,1);bodies.splice(i,1);i--;break;}
+      const f2=G*bj.m/distSq;bi.vx+=f2*dx2/dist*dt;bi.vy+=f2*dy2/dist*dt;bj.vx-=f2*dx2/dist*dt;bj.vy-=f2*dy2/dist*dt;
+    }
+  }
+  // Update & draw
+  bodies.forEach(b=>{b.x+=b.vx*dt;b.y+=b.vy*dt;ctx.fillStyle=b.c||'#ccc';ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fill();});
   requestAnimationFrame(loop);
-}requestAnimationFrame(loop);
+}addLog('🌌 シミュレーション開始');requestAnimationFrame(loop);
 </script>
 </body>
 </html>
-
