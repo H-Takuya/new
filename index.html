@@ -668,4 +668,579 @@
         const time = performance.now() * 0.001;
         
         ctx.save();
-        ctx.translate
+        ctx.translate(this.x(), this.y(), 0);
+        
+        for (let i = 0; i < flareCount; i++) {
+          const angle = (i / flareCount) * TAU + time * 0.2;
+          const flareSize = R * (2 + Math.sin(time * 0.7 + i) * 0.5);
+          
+          ctx.save();
+          ctx.rotate(angle);
+          
+          const flareGrad = ctx.createLinearGradient(0, 0, flareSize, 0);
+          flareGrad.addColorStop(0, 'rgba(255, 255, 200, 0.8)');
+          flareGrad.addColorStop(0.5, 'rgba(255, 180, 50, 0.4)');
+          flareGrad.addColorStop(1, 'rgba(255, 100, 50, 0)');
+          
+          ctx.fillStyle = flareGrad;
+          ctx.beginPath();
+          ctx.moveTo(R * 0.8, 0);
+          ctx.lineTo(flareSize, R * 0.4);
+          ctx.lineTo(flareSize, -R * 0.4);
+          ctx.closePath();
+          ctx.fill();
+          
+          ctx.restore();
+        }
+        
+        ctx.restore();
+      }
+    };
+    
+    function spawnPlanetSet() {
+      const data = [
+        {n:'水星', c:'#a9a9a9', m:3, r:3, d:70},
+        {n:'金星', c:'#e0c16c', m:5, r:4, d:110},
+        {n:'地球', c:'#4fc3f7', m:6, r:4.5, d:160},
+        {n:'火星', c:'#ff7043', m:3, r:3.5, d:220},
+        {n:'木星', c:'#fbc02d', m:190, r:8, d:330, hasBelt: true},
+        {n:'土星', c:'#d1c4e9', m:95, r:7, d:430, hasBelt: true},
+        {n:'天王星', c:'#80cbc4', m:14, r:6, d:530},
+        {n:'海王星', c:'#bcaaa4', m:17, r:5.8, d:620}
+      ];
+      
+      return data.map(p => {
+        const ang = rand(0, TAU);
+        const x = CX + Math.cos(ang) * p.d;
+        const y = CY + Math.sin(ang) * p.d;
+        const v = Math.sqrt(G * SUN.m / p.d);
+        const vx = -Math.sin(ang) * v;
+        const vy = Math.cos(ang) * v;
+        
+        return new Body({
+          name: p.n,
+          color: p.c,
+          mass: p.m,
+          radius: p.r,
+          x, y, vx, vy,
+          hasBelt: p.hasBelt || false
+        });
+      });
+    }
+    
+    let bodies = spawnPlanetSet();
+    let fragments = []; // 破片を別のリストに保存
+    
+    /*––––– FRAGMENTATION –––––*/
+    function fragment(b1, b2) {
+      const parts = 8; // より多くの破片
+      const totalMass = b1.m + b2.m;
+      const fragMass = totalMass / parts;
+      const angleBase = Math.atan2(b1.y - b2.y, b1.x - b2.x);
+      const collisionX = (b1.x + b2.x) / 2;
+      const collisionY = (b1.y + b2.y) / 2;
+      
+      // 衝突エフェクト
+      explosions.push({
+        x: collisionX,
+        y: collisionY,
+        radius: Math.max(b1.r, b2.r) * 2,
+        alpha: 1.0,
+        color: '#fff',
+        particles: Array(20).fill().map(() => ({
+          x: 0,
+          y: 0,
+          vx: rand(-3, 3),
+          vy: rand(-3, 3),
+          size: rand(1, 3),
+          life: 1.0
+        }))
+      });
+      
+      // 破片生成
+      for (let i = 0; i < parts; i++) {
+        const ang = angleBase + rand(-1, 1);
+        const speed = rand(1, 4);
+        const size = Math.sqrt(fragMass) * rand(0.5, 1.5);
+        
+        fragments.push(new Body({
+          color: rand(0, 1) > 0.5 ? b1.color : b2.color,
+          mass: fragMass,
+          radius: size,
+          x: collisionX,
+          y: collisionY,
+          vx: Math.cos(ang) * speed,
+          vy: Math.sin(ang) * speed
+        }));
+      }
+      
+      addLog(`⚠️ ${b1.name || 'Fragment'} と ${b2.name || 'Fragment'} が衝突し破片化`);
+    }
+    
+    /*––––– EXPLOSION EFFECTS –––––*/
+    const explosions = [];
+    
+    function updateExplosions(dt) {
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        const exp = explosions[i];
+        exp.alpha -= 0.02 * dt;
+        exp.radius += 2 * dt;
+        
+        exp.particles.forEach(p => {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life -= 0.03 * dt;
+        });
+        
+        if (exp.alpha <= 0) {
+          explosions.splice(i, 1);
+        }
+      }
+    }
+    
+    function drawExplosions() {
+      explosions.forEach(exp => {
+        // 爆発のグロー効果
+        const glow = ctx.createRadialGradient(
+          exp.x, exp.y, 0,
+          exp.x, exp.y, exp.radius
+        );
+        glow.addColorStop(0, `rgba(255, 220, 100, ${exp.alpha * 0.8})`);
+        glow.addColorStop(0.4, `rgba(255, 100, 50, ${exp.alpha * 0.5})`);
+        glow.addColorStop(1, `rgba(200, 50, 20, 0)`);
+        
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(exp.x, exp.y, exp.radius, 0, TAU);
+        ctx.fill();
+        
+        // 飛び散る破片
+        ctx.save();
+        ctx.translate(exp.x, exp.y);
+        
+        exp.particles.forEach(p => {
+          if (p.life > 0) {
+            ctx.fillStyle = `rgba(255, 200, 100, ${p.life})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, TAU);
+            ctx.fill();
+          }
+        });
+        
+        ctx.restore();
+      });
+    }
+    
+    /*––––– IMPROVED PHYSICS SIMULATION –––––*/
+    function calculateForces(bodies, fragments) {
+      // 重力作用の計算（Verlet積分法）
+      // 中心恒星からの引力
+      const allBodies = [...bodies, ...fragments];
+      
+      for (let i = 0; i < allBodies.length; i++) {
+        const b = allBodies[i];
+        
+        // 中心の恒星からの重力
+        const dx = SUN.x() - b.x;
+        const dy = SUN.y() - b.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq);
+        
+        // 距離が近すぎる場合は力を制限（数値安定性のため）
+        const safeDist = Math.max(dist, b.r * 2);
+        const f = G * SUN.m / (safeDist * safeDist);
+        
+        b.applyForce(f * dx / dist, f * dy / dist);
+        
+        // 他の天体との相互引力を計算
+        for (let j = i + 1; j < allBodies.length; j++) {
+          const bj = allBodies[j];
+          
+          const dx2 = bj.x - b.x;
+          const dy2 = bj.y - b.y;
+          const distSq2 = dx2 * dx2 + dy2 * dy2;
+          const dist2 = Math.sqrt(distSq2);
+          
+          // 衝突判定
+          if (dist2 < b.r + bj.r) {
+            // 両方とも名前付き天体（惑星）なら破片化
+            if (b.name && bj.name) {
+              fragment(b, bj);
+              b.alive = false;
+              bj.alive = false;
+            } 
+            // 片方だけが命名された天体なら質量を合成（小さな破片の吸収）
+            else if (b.name) {
+              b.m += bj.m;
+              b.r = Math.pow(b.r * b.r * b.r + bj.r * bj.r * bj.r, 1/3); // 体積保存的な半径計算
+              bj.alive = false;
+              addLog(`${b.name} が破片を吸収`);
+            }
+            else if (bj.name) {
+              bj.m += b.m;
+              bj.r = Math.pow(bj.r * bj.r * bj.r + b.r * b.r * b.r, 1/3);
+              b.alive = false;
+              addLog(`${bj.name} が破片を吸収`);
+            }
+            // 両方とも破片なら、大きい方が小さい方を吸収
+            else if (b.m > bj.m) {
+              b.m += bj.m;
+              b.r = Math.pow(b.r * b.r * b.r + bj.r * bj.r * bj.r, 1/3);
+              bj.alive = false;
+            } else {
+              bj.m += b.m;
+              bj.r = Math.pow(bj.r * bj.r * bj.r + b.r * b.r * b.r, 1/3);
+              b.alive = false;
+            }
+            continue;
+          }
+          
+          // 重力の計算
+          const f2 = G * b.m * bj.m / distSq2;
+          const fx = f2 * dx2 / dist2;
+          const fy = f2 * dy2 / dist2;
+          
+          // 力の適用（作用・反作用）
+          b.applyForce(fx, fy);
+          bj.applyForce(-fx, -fy);
+        }
+      }
+    }
+    
+    /*––––– DISTANCE AND CELESTIAL MECHANICS HELPERS –––––*/
+    function getOrbitalParameters(body) {
+      // 軌道要素の計算 (簡易版)
+      const dx = body.x - SUN.x();
+      const dy = body.y - SUN.y();
+      const r = Math.sqrt(dx*dx + dy*dy);
+      const v = Math.sqrt(body.vx*body.vx + body.vy*body.vy);
+      
+      // 軌道エネルギー
+      const energy = 0.5 * v*v - G * SUN.m / r;
+      
+      // 軌道の種類
+      let orbitType;
+      if (energy < 0) {
+        // 角運動量ベクトル
+        const angMomentum = r * v;
+        
+        // 離心率
+        const ecc = Math.sqrt(1 + 2 * energy * angMomentum * angMomentum / (G * SUN.m) ** 2);
+        
+        if (ecc < 0.01) orbitType = "円軌道";
+        else if (ecc < 0.1) orbitType = "ほぼ円軌道";
+        else if (ecc < 0.3) orbitType = "楕円軌道";
+        else orbitType = "高離心率楕円軌道";
+      } else if (Math.abs(energy) < 0.001) {
+        orbitType = "放物線軌道";
+      } else {
+        orbitType = "双曲線軌道";
+      }
+      
+      return {
+        distance: r,
+        velocity: v,
+        orbitType
+      };
+    }
+    
+    /*––––– INTERACTIVE ELEMENTS –––––*/
+    const resetBtn = document.getElementById('resetBtn');
+    const addPlanetBtn = document.getElementById('addPlanetBtn');
+    const addStarBtn = document.getElementById('addStarBtn');
+    const toggleTrailBtn = document.getElementById('toggleTrailBtn');
+    const timeSpeed = document.getElementById('timeSpeed');
+    const timeValue = document.getElementById('timeValue');
+    const zoomLevel = document.getElementById('zoomLevel');
+    const zoomValue = document.getElementById('zoomValue');
+    const tooltip = document.getElementById('tooltip');
+    const stats = document.getElementById('stats');
+    
+    // リセット機能
+    resetBtn.addEventListener('click', () => {
+      bodies = spawnPlanetSet();
+      fragments = [];
+      scale = 1;
+      offsetX = 0;
+      offsetY = 0;
+      addLog('🔄 シミュレーションをリセットしました');
+    });
+    
+    // 惑星の追加
+    addPlanetBtn.addEventListener('click', () => {
+      const distance = rand(80, config.spawnRadius.planets);
+      const angle = rand(0, TAU);
+      const x = CX + Math.cos(angle) * distance;
+      const y = CY + Math.sin(angle) * distance;
+      
+      // 軌道速度を計算 (円軌道用)
+      const v = Math.sqrt(G * SUN.m / distance);
+      const vx = -Math.sin(angle) * v * rand(0.8, 1.2); // 若干揺らぎを加える
+      const vy = Math.cos(angle) * v * rand(0.8, 1.2);
+      
+      const planetColors = ['#4fc3f7', '#ff7043', '#d1c4e9', '#80cbc4', '#bcaaa4', '#e0c16c', '#a9a9a9'];
+      const color = planetColors[Math.floor(rand(0, planetColors.length))];
+      
+      bodies.push(new Body({
+        name: `惑星-${bodies.length + 1}`,
+        color,
+        mass: rand(2, 20),
+        radius: rand(3, 6),
+        x, y, vx, vy,
+        hasBelt: rand(0, 1) > 0.8
+      }));
+      
+      addLog(`🪐 新しい惑星を追加しました`);
+    });
+    
+    // 恒星の追加
+    addStarBtn.addEventListener('click', () => {
+      const distance = rand(200, config.spawnRadius.planets);
+      const angle = rand(0, TAU);
+      const x = CX + Math.cos(angle) * distance;
+      const y = CY + Math.sin(angle) * distance;
+      
+      // 恒星なので軌道速度は通常の惑星より遅めに
+      const v = Math.sqrt(G * SUN.m / distance) * 0.7;
+      const vx = -Math.sin(angle) * v;
+      const vy = Math.cos(angle) * v;
+      
+      const starColors = ['#ff9800', '#ffeb3b', '#ffc107', '#03a9f4', '#f5f5f5'];
+      const color = starColors[Math.floor(rand(0, starColors.length))];
+      
+      bodies.push(new Body({
+        name: `恒星-${bodies.length + 1}`,
+        color,
+        mass: rand(500, 2000),
+        radius: rand(15, 25),
+        x, y, vx, vy,
+        type: 'star'
+      }));
+      
+      addLog(`⭐ 新しい恒星を追加しました`);
+    });
+    
+    // 軌道表示の切り替え
+    toggleTrailBtn.addEventListener('click', () => {
+      config.showTrails = !config.showTrails;
+      toggleTrailBtn.textContent = config.showTrails ? '軌道非表示' : '軌道表示';
+      addLog(`${config.showTrails ? '✓' : '✗'} 軌道表示を${config.showTrails ? 'オン' : 'オフ'}にしました`);
+    });
+    
+    // 時間スケールスライダー
+    timeSpeed.addEventListener('input', () => {
+      config.timeScale = parseFloat(timeSpeed.value);
+      timeValue.textContent = `${config.timeScale.toFixed(1)}x`;
+    });
+    
+    // ズームスライダー
+    zoomLevel.addEventListener('input', () => {
+      scale = parseFloat(zoomLevel.value);
+      zoomValue.textContent = `${scale.toFixed(1)}x`;
+    });
+    
+    // マウス操作（パン、ズーム、ホバーツールチップ）
+    let hoveredBody = null;
+    
+    cvs.addEventListener('mousedown', (e) => {
+      dragging = true;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+    });
+    
+    cvs.addEventListener('mouseup', () => {
+      dragging = false;
+    });
+    
+    cvs.addEventListener('mouseleave', () => {
+      dragging = false;
+      hoveredBody = null;
+      tooltip.style.opacity = 0;
+    });
+    
+    cvs.addEventListener('mousemove', (e) => {
+      if (dragging) {
+        // 視点のパン
+        offsetX += (e.clientX - lastMouseX) / scale;
+        offsetY += (e.clientY - lastMouseY) / scale;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+      }
+      
+      // マウス位置を世界座標に変換
+      const mouseX = (e.clientX - CX) / scale - offsetX;
+      const mouseY = (e.clientY - CY) / scale - offsetY;
+      
+      // 天体の検出（ホバー）
+      let closest = null;
+      let minDist = Infinity;
+      
+      for (const body of bodies) {
+        const dx = body.x - (CX + mouseX * scale);
+        const dy = body.y - (CY + mouseY * scale);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < Math.max(body.r * 2, 20) && dist < minDist) {
+          minDist = dist;
+          closest = body;
+        }
+      }
+      
+      // ツールチップの更新
+      if (closest) {
+        hoveredBody = closest;
+        tooltip.style.opacity = 1;
+        tooltip.style.left = `${e.clientX + 15}px`;
+        tooltip.style.top = `${e.clientY + 15}px`;
+        
+        const orbital = getOrbitalParameters(closest);
+        tooltip.innerHTML = `
+          <strong>${closest.name || '破片'}</strong><br>
+          質量: ${closest.m.toFixed(1)}<br>
+          半径: ${closest.r.toFixed(1)}<br>
+          距離: ${orbital.distance.toFixed(0)}<br>
+          速度: ${orbital.velocity.toFixed(2)}<br>
+          軌道: ${orbital.orbitType}
+        `;
+      } else {
+        hoveredBody = null;
+        tooltip.style.opacity = 0;
+      }
+    });
+    
+    // ホイールでのズーム
+    cvs.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      scale *= zoomFactor;
+      
+      // 範囲を制限
+      scale = Math.max(0.2, Math.min(3, scale));
+      
+      // スライダーも更新
+      zoomLevel.value = scale;
+      zoomValue.textContent = `${scale.toFixed(1)}x`;
+    });
+    
+    // 天体クリックで選択・追跡
+    let selectedBody = null;
+    
+    cvs.addEventListener('click', (e) => {
+      if (hoveredBody) {
+        if (selectedBody === hoveredBody) {
+          selectedBody = null;
+          addLog(`追跡を解除しました`);
+        } else {
+          selectedBody = hoveredBody;
+          addLog(`${selectedBody.name || '破片'} を追跡中`);
+        }
+      }
+    });
+    
+    // ダブルクリックで新規天体追加
+    cvs.addEventListener('dblclick', (e) => {
+      const worldX = (e.clientX - CX) / scale - offsetX;
+      const worldY = (e.clientY - CY) / scale - offsetY;
+      
+      // マウス位置に天体を追加
+      const x = CX + worldX * scale;
+      const y = CY + worldY * scale;
+      
+      const dx = x - SUN.x();
+      const dy = y - SUN.y();
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // 軌道速度の計算
+      const angle = Math.atan2(dy, dx);
+      const v = Math.sqrt(G * SUN.m / distance);
+      
+      // 接線方向の速度ベクトル
+      const vx = -Math.sin(angle) * v;
+      const vy = Math.cos(angle) * v;
+      
+      bodies.push(new Body({
+        name: `惑星-${bodies.length + 1}`,
+        color: `hsl(${rand(0, 360)}, 70%, 60%)`,
+        mass: rand(2, 30),
+        radius: rand(3, 7),
+        x, y, vx, vy
+      }));
+      
+      addLog(`🪐 ダブルクリックで惑星を追加しました`);
+    });
+    
+    /*––––– MAIN LOOP –––––*/
+    let last = performance.now();
+    function loop(now) {
+      const dt = Math.min((now - last) / 16, 3);
+      last = now;
+      
+      ctx.clearRect(0, 0, W, H);
+      
+      // 背景
+      drawBackground();
+      drawBackgroundStars(now);
+      drawGalaxyDisk(now, dt);
+      
+      // 太陽（常に中心）
+      ctx.save();
+      ctx.translate(offsetX * scale, offsetY * scale);
+      SUN.draw();
+      ctx.restore();
+      
+      // 物理計算
+      calculateForces(bodies, fragments);
+      
+      // 位置更新
+      [...bodies, ...fragments].forEach(b => b.update(dt));
+      
+      // 破片や爆発の更新
+      updateExplosions(dt);
+      
+      // 追跡中の天体がある場合はその位置に視点を合わせる
+      if (selectedBody && selectedBody.alive) {
+        const targetX = -(selectedBody.x - CX);
+        const targetY = -(selectedBody.y - CY);
+        offsetX = targetX / scale;
+        offsetY = targetY / scale;
+      }
+      
+      // 描画
+      ctx.save();
+      ctx.translate(CX, CY);
+      ctx.scale(scale, scale);
+      ctx.translate(offsetX, offsetY);
+      
+      // 先に爆発エフェクトを描画
+      drawExplosions();
+      
+      // 天体描画
+      [...bodies, ...fragments].forEach(b => {
+        if (b.alive) b.draw(ctx);
+      });
+      
+      ctx.restore();
+      
+      // 生存していない天体の削除
+      bodies = bodies.filter(b => b.alive);
+      fragments = fragments.filter(b => b.alive);
+      
+      // 画面外に出た破片を削除（最適化）
+      const margin = 2000; // 余裕を持たせる
+      fragments = fragments.filter(f => {
+        const dx = f.x - SUN.x();
+        const dy = f.y - SUN.y();
+        return dx * dx + dy * dy < margin * margin;
+      });
+      
+      // 統計情報の表示
+      stats.textContent = `天体数: ${bodies.length} | 破片数: ${fragments.length} | FPS: ${(1000 / dt / 16).toFixed(0)}`;
+      
+      requestAnimationFrame(loop);
+    }
+    
+    addLog('🌌 シミュレーション開始 - マウスドラッグでパン、ホイールでズーム');
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
