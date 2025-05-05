@@ -1,150 +1,95 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>銀河系シミュレーター（完全版・高速＆グラフィック強化）</title>
+  <meta charset="UTF-8" />
+  <title>GPU 加速版 ✦ 銀河系シミュレーター</title>
   <style>
-    body {
-      margin: 0;
-      background: radial-gradient(ellipse at center, #000010 0%, #000000 100%);
-      overflow: hidden;
-      color: white;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    canvas {
-      display: block;
-      margin: 0 auto;
-      cursor: crosshair;
-    }
-    #history {
-      position: fixed;
-      top: 15px;
-      right: 15px;
-      max-height: calc(100% - 30px);
-      overflow-y: auto;
-      font-size: 12px;
-      background: rgba(10, 10, 20, 0.6);
-      padding: 10px 15px;
-      border-radius: 5px;
-      white-space: pre-line;
-      color: rgba(200, 200, 255, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      max-width: 320px;
-      z-index: 10;
-    }
+    html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif}
+    canvas{display:block;width:100%;height:100%;cursor:crosshair}
+    #ui{position:fixed;top:10px;left:10px;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+    #controls{position:fixed;bottom:20px;left:20px;display:flex;gap:10px;background:rgba(20,20,30,.7);padding:10px;border-radius:8px;border:1px solid rgba(100,120,255,.3);box-shadow:0 0 15px rgba(70,130,240,.3);pointer-events:all}
+    button{background:rgba(60,80,170,.8);color:#fff;border:none;padding:8px 12px;border-radius:5px;cursor:pointer;transition:.2s;font-weight:500}
+    button:hover{background:rgba(80,100,220,.9);box-shadow:0 0 8px rgba(120,170,255,.6)}
+    .slider-container{display:flex;align-items:center;gap:10px;color:#cce}
+    input[type=range]{accent-color:rgb(80,120,255)}
+    #log{position:fixed;top:10px;right:10px;max-width:340px;max-height:90vh;overflow-y:auto;font:12px/1.4 monospace;background:rgba(10,10,30,.7);color:#cce;border:1px solid rgba(100,120,255,.3);padding:8px 12px;border-radius:8px;white-space:pre-line;pointer-events:none;box-shadow:0 0 15px rgba(70,130,240,.3)}
+    #log::-webkit-scrollbar{width:5px}
+    #log::-webkit-scrollbar-thumb{background:rgba(100,150,255,.4);border-radius:5px}
+    #stats{position:fixed;bottom:10px;right:10px;background:rgba(10,10,30,.7);color:#cce;border:1px solid rgba(100,120,255,.3);padding:8px 12px;border-radius:8px;font:12px/1.4 monospace;pointer-events:none;box-shadow:0 0 15px rgba(70,130,240,.3)}
+    .tooltip{position:absolute;background:rgba(20,30,60,.85);color:#fff;padding:5px 10px;border-radius:4px;font-size:12px;pointer-events:none;opacity:0;transition:opacity .2s;border:1px solid rgba(100,150,255,.4);z-index:100}
   </style>
+  <!-- GPU.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/gpu.js@2.16.0/dist/gpu.min.js"></script>
 </head>
 <body>
-  <div id="history">シミュレーション履歴</div>
   <canvas id="sim"></canvas>
+  <div id="ui">
+    <div id="controls">
+      <button id="resetBtn">リセット</button>
+      <button id="addPlanetBtn">惑星追加</button>
+      <button id="addStarBtn">恒星追加</button>
+      <button id="toggleTrailBtn">軌道表示</button>
+      <button id="toggleGpuBtn">GPU: OFF</button>
+      <div class="slider-container"><span>時間速度:</span><input type="range" id="timeSpeed" min="0.1" max="3" step="0.1" value="1"><span id="timeValue">1.0x</span></div>
+      <div class="slider-container"><span>ズーム:</span><input type="range" id="zoomLevel" min="0.2" max="3" step="0.1" value="1"><span id="zoomValue">1.0x</span></div>
+    </div>
+  </div>
+  <div id="log"></div>
+  <div id="stats"></div>
+  <div class="tooltip" id="tooltip"></div>
 
-  <script>
-    const canvas = document.getElementById("sim");
-    const ctx = canvas.getContext("2d");
-    const historyEl = document.getElementById("history");
+<script>
+/* ========= 基本セットアップ ========= */
+const cvs=document.getElementById('sim');
+const ctx=cvs.getContext('2d');
+const DPR=window.devicePixelRatio||1;let W,H,CX,CY;function resize(){W=innerWidth;H=innerHeight;CX=W/2;CY=H/2;cvs.width=W*DPR;cvs.height=H*DPR;cvs.style.width=W+'px';cvs.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0)}resize();addEventListener('resize',resize);
+const TAU=Math.PI*2,rand=(a,b)=>Math.random()*(b-a)+a,randInt=(a,b)=>Math.floor(rand(a,b+1));
 
-    let canvasWidth = window.innerWidth;
-    let canvasHeight = window.innerHeight;
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+/* ========= パラメータ ========= */
+let config={timeScale:1,showTrails:true,zoomLevel:1,G:2e-4,useGpu:false,maxBodies:2048};
 
-    let centerX = canvasWidth / 2;
-    let centerY = canvasHeight / 2;
+/* ========= ログ ========= */
+const logEl=document.getElementById('log');const logs=[];function addLog(m){const t=new Date().toLocaleTimeString('ja-JP',{hour12:false});logs.unshift(`[${t}] ${m}`);if(logs.length>60)logs.pop();logEl.textContent=logs.join('\n');logEl.scrollTop=0}
 
-    const startDate = new Date("2025-01-01T00:00:00");
-    let elapsedDays = 0;
-    let history = ["シミュレーション開始: " + startDate.toLocaleString()];
-    historyEl.textContent = history.join('\n');
+/* ========= 天体定義 ========= */
+class Body{constructor(opts){Object.assign(this,opts);this.ax=0;this.ay=0;this.trail=[];this.trailMax=100;this.alive=true}
+ update(dt){this.vx+=this.ax*dt*0.5*config.timeScale;this.vy+=this.ay*dt*0.5*config.timeScale;this.x+=this.vx*dt*config.timeScale;this.y+=this.vy*dt*config.timeScale;this.ax=this.ay=0;if(config.showTrails&&performance.now()%5<1){this.trail.push({x:this.x,y:this.y});if(this.trail.length>this.trailMax)this.trail.shift()}}
+ draw(){ctx.fillStyle=this.color;ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,TAU);ctx.fill()}}
 
-    const stars = Array.from({ length: 400 }, () => ({
-      x: Math.random() * canvasWidth,
-      y: Math.random() * canvasHeight,
-      radius: Math.random() * 1.5,
-      alpha: 0.3 + Math.random() * 0.7
-    }));
+/* ========= 中心恒星 ========= */
+const SUN={x:()=>CX,y:()=>CY,m:1e7,r:35,draw(){ctx.fillStyle='#ffca28';ctx.beginPath();ctx.arc(this.x(),this.y(),this.r,0,TAU);ctx.fill()}};
 
-    const planets = [
-      { name: "水星", color: "#a9a9a9", radius: 3, distance: 60, speed: 0.006 * 5, angle: 0 },
-      { name: "金星", color: "#e0c16c", radius: 4, distance: 100, speed: 0.0045 * 5, angle: 0 },
-      { name: "地球", color: "#4fc3f7", radius: 4.5, distance: 150, speed: 0.0035 * 5, angle: 0 },
-      { name: "火星", color: "#ff7043", radius: 3.5, distance: 210, speed: 0.0028 * 5, angle: 0 },
-      { name: "木星", color: "#fbc02d", radius: 8, distance: 300, speed: 0.0015 * 5, angle: 0 },
-      { name: "土星", color: "#d1c4e9", radius: 7, distance: 400, speed: 0.0010 * 5, angle: 0 },
-      { name: "天王星", color: "#80cbc4", radius: 6, distance: 500, speed: 0.0007 * 5, angle: 0 },
-      { name: "海王星", color: "#bcaaa4", radius: 5.8, distance: 600, speed: 0.0005 * 5, angle: 0 }
-    ];
+/* ========= 生成 ========= */
+function spawnPlanetSet(){const data=[{n:'水星',c:'#a9a9a9',m:3,r:3,d:70},{n:'金星',c:'#e0c16c',m:5,r:4,d:110},{n:'地球',c:'#4fc3f7',m:6,r:4.5,d:160},{n:'火星',c:'#ff7043',m:3,r:3.5,d:220}];return data.map(p=>{const ang=rand(0,TAU);const x=CX+Math.cos(ang)*p.d;const y=CY+Math.sin(ang)*p.d;const v=Math.sqrt(config.G*SUN.m/p.d);const vx=-Math.sin(ang)*v;const vy=Math.cos(ang)*v;return new Body({name:p.n,color:p.c,m:p.m,r:p.r,x,y,vx,vy})})}
+let bodies=spawnPlanetSet();
 
-    let meteor = null;
-    let blackHole = null;
+/* ========= GPU.js カーネル ========= */
+const gpu=new GPU({mode:'gpu'});
+let kernel=null;
+function buildKernel(maxN){kernel=gpu.createKernel(function(px,py,pvx,pvy,pm,n,G,dt){const i=this.thread.x;let ax=0.0,ay=0.0;const xi=px[i],yi=py[i];for(let j=0;j<n;j++){if(i===j)continue;const dx=px[j]-xi;const dy=py[j]-yi;const r2=dx*dx+dy*dy+1e-6;const invR3=1.0/Math.pow(r2,1.5);const f=G*pm[j]*invR3;ax+=f*dx;ay+=f*dy}let vxi=pvx[i]+ax*dt;let vyi=pvy[i]+ay*dt;let nxi=xi+vxi*dt;let nyi=yi+vyi*dt;if(nxi>1e6||nyi>1e6){vxi=0;vyi=0;}this.color(nxi,nyi,vxi,vyi);}).setPipeline(true).setOutput([maxN]);}
+buildKernel(config.maxBodies);
 
-    function logEvent(message) {
-      const now = new Date(startDate.getTime() + elapsedDays * 86400000);
-      const dateStr = now.toLocaleString();
-      history.unshift(`[${dateStr}] ${message}`);
-      if (history.length > 50) history.pop();
-      historyEl.textContent = history.join('\n');
-      historyEl.scrollTop = 0;
-    }
+/* ========= 配列バッファ ========= */
+let px=new Float32Array(config.maxBodies),py=new Float32Array(config.maxBodies),pvx=new Float32Array(config.maxBodies),pvy=new Float32Array(config.maxBodies),pm=new Float32Array(config.maxBodies);
+function syncToArrays(){for(let i=0;i<bodies.length;i++){px[i]=bodies[i].x;py[i]=bodies[i].y;pvx[i]=bodies[i].vx;pvy[i]=bodies[i].vy;pm[i]=bodies[i].m}}
+function syncFromTexture(tex){const res=new Float32Array(tex.data);for(let i=0;i<bodies.length;i++){bodies[i].x=res[i*4];bodies[i].y=res[i*4+1];bodies[i].vx=res[i*4+2];bodies[i].vy=res[i*4+3];}}
 
-    function drawStars() {
-      stars.forEach(s => {
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
-        ctx.fill();
-      });
-    }
+/* ========= UI ========= */
+const resetBtn=document.getElementById('resetBtn');const addPlanetBtn=document.getElementById('addPlanetBtn');const addStarBtn=document.getElementById('addStarBtn');const toggleTrailBtn=document.getElementById('toggleTrailBtn');const timeSpeed=document.getElementById('timeSpeed');const timeValue=document.getElementById('timeValue');const zoomLevel=document.getElementById('zoomLevel');const zoomValue=document.getElementById('zoomValue');const stats=document.getElementById('stats');const toggleGpuBtn=document.getElementById('toggleGpuBtn');
+resetBtn.onclick=()=>{bodies=spawnPlanetSet();addLog('🔄 リセット')};addPlanetBtn.onclick=()=>{const d=rand(80,600);const a=rand(0,TAU);const x=CX+Math.cos(a)*d;const y=CY+Math.sin(a)*d;const v=Math.sqrt(config.G*SUN.m/d);bodies.push(new Body({name:`惑星-${bodies.length}`,color:`hsl(${rand(0,360)},70%,60%)`,m:rand(2,20),r:rand(3,6),x,y,vx:-Math.sin(a)*v,vy:Math.cos(a)*v}));addLog('🪐 惑星追加')};addStarBtn.onclick=()=>{const d=rand(200,800);const a=rand(0,TAU);const x=CX+Math.cos(a)*d;const y=CY+Math.sin(a)*d;const v=Math.sqrt(config.G*SUN.m/d)*0.7;bodies.push(new Body({name:`恒星-${bodies.length}`,color:'#ff9800',m:rand(500,2000),r:rand(10,20),x,y,vx:-Math.sin(a)*v,vy:Math.cos(a)*v}));addLog('⭐ 恒星追加')};toggleTrailBtn.onclick=()=>{config.showTrails=!config.showTrails;toggleTrailBtn.textContent=config.showTrails?'軌道非表示':'軌道表示'};timeSpeed.oninput=()=>{config.timeScale=parseFloat(timeSpeed.value);timeValue.textContent=config.timeScale.toFixed(1)+'x'};zoomLevel.oninput=()=>{config.zoomLevel=parseFloat(zoomLevel.value);zoomValue.textContent=config.zoomLevel.toFixed(1)+'x'};toggleGpuBtn.onclick=()=>{config.useGpu=!config.useGpu;toggleGpuBtn.textContent='GPU: '+(config.useGpu?'ON':'OFF');addLog(`GPU モード ${config.useGpu?'有効':'無効'}`)};
 
-    function drawSun() {
-      const pulse = 1 + 0.05 * Math.sin(Date.now() * 0.002);
-      const sunRadius = 25 * pulse;
-      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, sunRadius);
-      gradient.addColorStop(0, "#fff");
-      gradient.addColorStop(0.4, "#fff0a0");
-      gradient.addColorStop(0.8, "#ffcc00");
-      gradient.addColorStop(1, "#ff9900");
-      ctx.fillStyle = gradient;
-      ctx.shadowColor = "#ffff66";
-      ctx.shadowBlur = 50;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowColor = "transparent";
-    }
+/* ========= CPU 版力計算 ========= */
+function cpuForces(dt){for(const b of bodies){const dx=SUN.x()-b.x,dy=SUN.y()-b.y;const r2=dx*dx+dy*dy;const r=Math.sqrt(r2);const f=config.G*SUN.m/(r*r);b.ax=f*dx/r;b.ay=f*dy/r;}
+ for(let i=0;i<bodies.length;i++){for(let j=i+1;j<bodies.length;j++){const bi=bodies[i],bj=bodies[j];const dx=bj.x-bi.x,dy=bj.y-bi.y;const r2=dx*dx+dy*dy+1e-6;const r=Math.sqrt(r2);const f=config.G*bi.m*bj.m/r2;const fx=f*dx/r,fy=f*dy/r;bi.ax+=fx/bi.m;bi.ay+=fy/bi.m;bj.ax-=fx/bj.m;bj.ay-=fy/bj.m;}}}
 
-    function drawPlanets() {
-      planets.forEach(p => {
-        p.angle += p.speed;
-        let x = centerX + Math.cos(p.angle) * p.distance;
-        let y = centerY + Math.sin(p.angle) * p.distance;
-
-        ctx.beginPath();
-        ctx.arc(x, y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.fill();
-      });
-    }
-
-    function animate() {
-      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-      elapsedDays += 0.05 * 5;
-      drawStars();
-      drawSun();
-      drawPlanets();
-      requestAnimationFrame(animate);
-    }
-
-    window.addEventListener('resize', () => {
-      canvasWidth = window.innerWidth;
-      canvasHeight = window.innerHeight;
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      centerX = canvasWidth / 2;
-      centerY = canvasHeight / 2;
-    });
-
-    animate();
-  </script>
+/* ========= ループ ========= */
+let last=performance.now();function loop(now){const dt=Math.min((now-last)/16,3);last=now;
+ ctx.save();ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.restore();
+ ctx.save();ctx.translate((CX)*(config.zoomLevel-1), (CY)*(config.zoomLevel-1));ctx.scale(config.zoomLevel,config.zoomLevel);
+ SUN.draw();
+ if(config.useGpu){syncToArrays();const tex=kernel(px,py,pvx,pvy,pm,bodies.length,config.G*config.timeScale,dt*config.timeScale);syncFromTexture(tex);}else{cpuForces(dt);for(const b of bodies)b.update(dt);}for(const b of bodies)b.draw();ctx.restore();stats.textContent=`天体数:${bodies.length} | GPU:${config.useGpu?'ON':'OFF'}`;requestAnimationFrame(loop)}
+addLog('🌌 シミュ開始');requestAnimationFrame(loop);
+</script>
 </body>
 </html>
 
