@@ -2,217 +2,162 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>アリの巣シミュレーター ✦ 巣作り・探索・フェロモン</title>
+  <title>生命進化シミュレーター ✦ 1分で生物誕生から人類まで</title>
   <style>
-    html, body { height: 100%; margin: 0; background: #222; overflow: hidden; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; }
-    canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; background: #222; }
-    #controls { position: fixed; bottom: 20px; left: 20px; display: flex; gap: 10px; background: rgba(40, 40, 60, 0.85); padding: 12px; border-radius: 8px; border: 1px solid rgba(120, 140, 255, 0.35); box-shadow: 0 0 18px rgba(70, 130, 240, 0.35); pointer-events: all; z-index: 10; }
-    button { background: rgba(60, 80, 170, 0.85); color: #fff; border: none; padding: 8px 14px; border-radius: 5px; cursor: pointer; transition: all 0.2s; font-weight: 500; }
-    button:hover { background: rgba(80, 100, 220, 0.95); box-shadow: 0 0 10px rgba(120, 170, 255, 0.7); }
+    html, body { height: 100%; margin: 0; background: #111; overflow: hidden; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; }
+    canvas { display: block; width: 100vw; height: 100vh; background: #111; }
+    #info { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(30,30,40,0.85); color: #fff; padding: 10px 24px; border-radius: 10px; font-size: 1.2em; z-index: 10; }
     #stats { position: fixed; bottom: 10px; right: 10px; background: rgba(10, 10, 30, 0.75); color: #cce; border: 1px solid rgba(120, 140, 255, 0.35); padding: 8px 12px; border-radius: 8px; font: 12px/1.45 monospace; box-shadow: 0 0 15px rgba(70, 130, 240, 0.35); pointer-events: none; z-index: 10; }
   </style>
 </head>
 <body>
   <canvas id="sim"></canvas>
-  <div id="controls">
-    <button id="addAntBtn">アリ追加</button>
-    <button id="addFoodBtn">餌追加</button>
-    <button id="togglePheromoneBtn">フェロモン表示</button>
-    <button id="resetBtn">リセット</button>
-  </div>
+  <div id="info">原始地球…</div>
   <div id="stats"></div>
   <script>
-    // --- 基本設定 ---
+    // --- 設定 ---
     const cvs = document.getElementById("sim");
     const ctx = cvs.getContext("2d");
     let W = window.innerWidth, H = window.innerHeight;
     cvs.width = W; cvs.height = H;
     window.addEventListener("resize", () => { W = window.innerWidth; H = window.innerHeight; cvs.width = W; cvs.height = H; });
 
-    // --- 巣・餌・アリ・フェロモン ---
-    const nest = { x: W/2, y: H/2, r: 18 };
-    const foods = [];
-    const ants = [];
-    const pheromones = []; // {x, y, strength, type: "toFood"|"toNest"}
-    let showPheromone = true;
+    // --- ステージ定義 ---
+    const stages = [
+      { name: "原始地球", duration: 3, color: "#444", desc: "海と火山の時代" },
+      { name: "生命誕生", duration: 5, color: "#2e5d3a", desc: "単細胞生物の出現" },
+      { name: "多細胞生物", duration: 7, color: "#3a7d5d", desc: "多細胞化・進化の加速" },
+      { name: "魚類・両生類", duration: 7, color: "#2a5d7d", desc: "海から陸へ" },
+      { name: "爬虫類・恐竜", duration: 7, color: "#7d5d2a", desc: "巨大生物の時代" },
+      { name: "哺乳類・鳥類", duration: 7, color: "#7d3a5d", desc: "恐竜絶滅・哺乳類台頭" },
+      { name: "霊長類", duration: 7, color: "#5d3a2e", desc: "サルからヒトへ" },
+      { name: "人類誕生", duration: 7, color: "#e0c080", desc: "文明の始まり" },
+      { name: "現代", duration: 5, color: "#b0b0b0", desc: "現代社会" }
+    ];
+    // 合計約55秒
 
-    // --- アリクラス ---
-    class Ant {
-      constructor(x, y) {
-        this.x = x; this.y = y;
-        this.angle = Math.random() * Math.PI * 2;
-        this.carrying = false;
-        this.trail = [];
+    // --- エンティティ定義 ---
+    class Entity {
+      constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type; // "cell", "fish", "dino", "mammal", "primate", "human"
+        this.age = 0;
+        this.dir = Math.random() * Math.PI * 2;
+        this.size = 4 + Math.random() * 6;
+        this.color = "#fff";
+        this.setColor();
+      }
+      setColor() {
+        switch(this.type) {
+          case "cell": this.color = "#aaffaa"; break;
+          case "fish": this.color = "#66ccff"; break;
+          case "dino": this.color = "#eebb77"; break;
+          case "mammal": this.color = "#ccccaa"; break;
+          case "primate": this.color = "#ffcc99"; break;
+          case "human": this.color = "#ffeedd"; break;
+        }
       }
       update() {
-        // 餌を持っていない場合：餌探索
-        if (!this.carrying) {
-          // 餌が近くにあれば拾う
-          for (const food of foods) {
-            const dx = food.x - this.x, dy = food.y - this.y;
-            if (Math.hypot(dx, dy) < 10 && food.amount > 0) {
-              this.carrying = true;
-              food.amount--;
-              break;
-            }
-          }
-          // フェロモン追従 or ランダムウォーク
-          let best = null, bestStrength = 0;
-          if (showPheromone) {
-            for (const p of pheromones) {
-              if (p.type === "toFood") {
-                const d = Math.hypot(p.x - this.x, p.y - this.y);
-                if (d < 30 && p.strength > bestStrength) {
-                  best = p; bestStrength = p.strength;
-                }
-              }
-            }
-          }
-          if (best && Math.random() < 0.8) {
-            this.angle = Math.atan2(best.y - this.y, best.x - this.x) + rand(-0.3, 0.3);
-          } else {
-            this.angle += rand(-0.25, 0.25);
-          }
-        } else {
-          // 餌を持っている場合：巣へ帰る
-          const dx = nest.x - this.x, dy = nest.y - this.y;
-          if (Math.hypot(dx, dy) < nest.r + 2) {
-            this.carrying = false;
-          } else {
-            this.angle = Math.atan2(dy, dx) + rand(-0.15, 0.15);
-          }
-        }
-        // 前進
-        const speed = 1.5;
-        this.x += Math.cos(this.angle) * speed;
-        this.y += Math.sin(this.angle) * speed;
-        // 壁で跳ね返る
-        if (this.x < 5 || this.x > W-5) this.angle = Math.PI - this.angle;
-        if (this.y < 5 || this.y > H-5) this.angle = -this.angle;
-        // フェロモンを残す
-        pheromones.push({
-          x: this.x, y: this.y,
-          strength: 1.0,
-          type: this.carrying ? "toNest" : "toFood"
-        });
-        // トレイル
-        this.trail.push({x: this.x, y: this.y});
-        if (this.trail.length > 30) this.trail.shift();
+        this.age++;
+        // ランダムウォーク
+        this.dir += (Math.random()-0.5)*0.2;
+        this.x += Math.cos(this.dir) * 0.8;
+        this.y += Math.sin(this.dir) * 0.8;
+        // 画面端で跳ね返る
+        if(this.x < 10 || this.x > W-10) this.dir = Math.PI - this.dir;
+        if(this.y < 10 || this.y > H-10) this.dir = -this.dir;
       }
       draw() {
-        // トレイル
-        ctx.save();
-        ctx.strokeStyle = this.carrying ? "#ffb30088" : "#4fc3f788";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = 0; i < this.trail.length; i++) {
-          const p = this.trail[i];
-          if (i === 0) ctx.moveTo(p.x, p.y);
-          else ctx.lineTo(p.x, p.y);
-        }
-        ctx.stroke();
-        ctx.restore();
-        // 本体
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle);
-        ctx.fillStyle = this.carrying ? "#ffb300" : "#4fc3f7";
         ctx.beginPath();
-        ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI*2);
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    // --- 餌クラス ---
-    class Food {
-      constructor(x, y) {
-        this.x = x; this.y = y;
-        this.amount = randInt(10, 30);
-      }
-      draw() {
-        ctx.save();
-        ctx.fillStyle = "#8bc34a";
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 7, 0, Math.PI*2);
-        ctx.fill();
-        ctx.fillStyle = "#fff";
-        ctx.font = "10px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(this.amount, this.x, this.y+3);
-        ctx.restore();
-      }
-    }
-
-    // --- フェロモン減衰 ---
-    function updatePheromones() {
-      for (let i = pheromones.length - 1; i >= 0; i--) {
-        pheromones[i].strength *= 0.97;
-        if (pheromones[i].strength < 0.05) pheromones.splice(i, 1);
-      }
-    }
-
-    // --- 描画 ---
-    function drawAll() {
-      ctx.clearRect(0, 0, W, H);
-      // 巣
-      ctx.save();
-      ctx.fillStyle = "#795548";
-      ctx.beginPath();
-      ctx.arc(nest.x, nest.y, nest.r, 0, Math.PI*2);
-      ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.restore();
-      // フェロモン
-      if (showPheromone) {
-        for (const p of pheromones) {
-          ctx.save();
-          ctx.globalAlpha = p.strength * 0.5;
-          ctx.fillStyle = p.type === "toFood" ? "#4fc3f7" : "#ffb300";
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
-          ctx.fill();
-          ctx.restore();
+        if(this.type === "cell") {
+          ctx.arc(0, 0, this.size, 0, Math.PI*2);
+        } else if(this.type === "fish") {
+          ctx.ellipse(0, 0, this.size*1.2, this.size*0.7, 0, 0, Math.PI*2);
+        } else if(this.type === "dino") {
+          ctx.ellipse(0, 0, this.size*1.5, this.size*0.9, 0, 0, Math.PI*2);
+        } else if(this.type === "mammal" || this.type === "primate") {
+          ctx.arc(0, 0, this.size, 0, Math.PI*2);
+        } else if(this.type === "human") {
+          ctx.arc(0, 0, this.size*0.7, 0, Math.PI*2);
+          ctx.fillStyle = "#222";
+          ctx.arc(0, -this.size*0.7, this.size*0.3, 0, Math.PI*2);
         }
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = 0.85;
+        ctx.fill();
+        ctx.restore();
       }
-      // 餌
-      for (const food of foods) if (food.amount > 0) food.draw();
-      // アリ
-      for (const ant of ants) ant.draw();
+    }
+
+    // --- シミュレーション管理 ---
+    let stageIdx = 0, stageTime = 0, entities = [];
+    const info = document.getElementById("info");
+    const stats = document.getElementById("stats");
+
+    function nextStage() {
+      stageIdx++;
+      if(stageIdx >= stages.length) stageIdx = stages.length-1;
+      stageTime = 0;
+      entities = [];
+      spawnEntities();
+    }
+
+    function spawnEntities() {
+      entities = [];
+      let type = "cell";
+      if(stageIdx === 0) return; // 原始地球は何も出さない
+      if(stageIdx === 1) type = "cell";
+      if(stageIdx === 2) type = "cell";
+      if(stageIdx === 3) type = "fish";
+      if(stageIdx === 4) type = "dino";
+      if(stageIdx === 5) type = "mammal";
+      if(stageIdx === 6) type = "primate";
+      if(stageIdx === 7) type = "human";
+      if(stageIdx === 8) type = "human";
+      let count = 30;
+      if(stageIdx === 7) count = 15;
+      if(stageIdx === 8) count = 30;
+      for(let i=0;i<count;i++) {
+        entities.push(new Entity(
+          Math.random()*W*0.8+W*0.1,
+          Math.random()*H*0.8+H*0.1,
+          type
+        ));
+      }
     }
 
     // --- メインループ ---
     function loop() {
-      ants.forEach(a => a.update());
-      updatePheromones();
-      drawAll();
-      document.getElementById("stats").textContent =
-        `アリ: ${ants.length}　餌: ${foods.filter(f=>f.amount>0).length}　フェロモン: ${pheromones.length}`;
+      // 背景
+      ctx.fillStyle = stages[stageIdx].color;
+      ctx.fillRect(0,0,W,H);
+
+      // エンティティ
+      for(const e of entities) {
+        e.update();
+        e.draw();
+      }
+
+      // ステージ進行
+      stageTime += 1/60;
+      if(stageTime > stages[stageIdx].duration) {
+        if(stageIdx < stages.length-1) {
+          nextStage();
+        }
+      }
+
+      // テキスト表示
+      info.innerHTML = `<b>${stages[stageIdx].name}</b>　${stages[stageIdx].desc}`;
+      stats.textContent = `時代: ${stages[stageIdx].name}　個体数: ${entities.length}　経過: ${Math.floor(stageTime)}秒`;
+
       requestAnimationFrame(loop);
     }
 
-    // --- UIイベント ---
-    document.getElementById("addAntBtn").onclick = () => ants.push(new Ant(nest.x + rand(-10,10), nest.y + rand(-10,10)));
-    document.getElementById("addFoodBtn").onclick = () => foods.push(new Food(rand(30, W-30), rand(30, H-30)));
-    document.getElementById("togglePheromoneBtn").onclick = () => {
-      showPheromone = !showPheromone;
-      document.getElementById("togglePheromoneBtn").textContent = showPheromone ? "フェロモン表示" : "フェロモン非表示";
-    };
-    document.getElementById("resetBtn").onclick = () => {
-      ants.length = 0; foods.length = 0; pheromones.length = 0;
-      for(let i=0;i<10;i++) ants.push(new Ant(nest.x + rand(-10,10), nest.y + rand(-10,10)));
-      for(let i=0;i<3;i++) foods.push(new Food(rand(30, W-30), rand(30, H-30)));
-    };
-
-    // --- ユーティリティ ---
-    function rand(a, b) { return Math.random() * (b - a) + a; }
-    function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
-
     // --- 初期化 ---
-    for(let i=0;i<10;i++) ants.push(new Ant(nest.x + rand(-10,10), nest.y + rand(-10,10)));
-    for(let i=0;i<3;i++) foods.push(new Food(rand(30, W-30), rand(30, H-30)));
+    spawnEntities();
     loop();
   </script>
 </body>
