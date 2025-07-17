@@ -2,54 +2,43 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>高度な銀河系シミュレーター ✦ GPU / CPU 切替対応 & N‑Body 物理</title>
+  <title>アリの巣シミュレーター ✦ 巣作り・探索・フェロモン</title>
   <!--
     ◇ 概要
-      * 元の 2D 銀河シミュレーターをベースに、GPU.js を用いた並列重力計算を追加。
-      * ボタンで GPU ⇔ CPU をリアルタイムに切り替え可能。
-      * コード全体を整形 & コメント追加して、読みやすさ優先のフル版です。
+      * 2D空間でアリが巣を作り、餌を探し、フェロモンで経路を共有するシミュレーター。
+      * 巣・餌・アリ・フェロモンの可視化。
+      * アリの行動はランダムウォーク＋フェロモン追従＋餌発見時の帰巣。
+      * UIでアリ・餌の追加、フェロモン表示切替などが可能。
   -->
   <style>
-    /* ===== ベースレイアウト & UI ===== */
     html, body {
       height: 100%;
       margin: 0;
-      background: #000;
+      background: #222;
       overflow: hidden;
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     }
-
     canvas {
       display: block;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
       cursor: crosshair;
+      background: #222;
     }
-
-    #ui {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      pointer-events: none;
-    }
-
     #controls {
       position: fixed;
       bottom: 20px;
       left: 20px;
       display: flex;
       gap: 10px;
-      background: rgba(20, 20, 30, 0.75);
+      background: rgba(40, 40, 60, 0.85);
       padding: 12px;
       border-radius: 8px;
       border: 1px solid rgba(120, 140, 255, 0.35);
       box-shadow: 0 0 18px rgba(70, 130, 240, 0.35);
       pointer-events: all;
+      z-index: 10;
     }
-
     button {
       background: rgba(60, 80, 170, 0.85);
       color: #fff;
@@ -60,497 +49,240 @@
       transition: all 0.2s;
       font-weight: 500;
     }
-
     button:hover {
       background: rgba(80, 100, 220, 0.95);
       box-shadow: 0 0 10px rgba(120, 170, 255, 0.7);
     }
-
-    .slider-container {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: #cce;
-    }
-
-    input[type="range"] {
-      accent-color: rgb(90, 130, 255);
-    }
-
-    #log, #stats {
+    #stats {
       position: fixed;
-      font: 12px/1.45 monospace;
+      bottom: 10px;
+      right: 10px;
       background: rgba(10, 10, 30, 0.75);
       color: #cce;
       border: 1px solid rgba(120, 140, 255, 0.35);
       padding: 8px 12px;
       border-radius: 8px;
+      font: 12px/1.45 monospace;
       box-shadow: 0 0 15px rgba(70, 130, 240, 0.35);
-    }
-
-    #log {
-      top: 10px;
-      right: 10px;
-      max-width: 360px;
-      max-height: 88vh;
-      overflow-y: auto;
-      white-space: pre-line;
-    }
-
-    #stats {
-      bottom: 10px;
-      right: 10px;
       pointer-events: none;
-    }
-
-    #log::-webkit-scrollbar {
-      width: 5px;
-    }
-
-    #log::-webkit-scrollbar-thumb {
-      background: rgba(100, 150, 255, 0.45);
-      border-radius: 5px;
-    }
-
-    .tooltip {
-      position: absolute;
-      background: rgba(20, 30, 60, 0.85);
-      color: #fff;
-      padding: 5px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s;
-      border: 1px solid rgba(100, 150, 255, 0.45);
-      z-index: 100;
+      z-index: 10;
     }
   </style>
-  <!-- GPU.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/gpu.js@2.16.0/dist/gpu.min.js"></script>
 </head>
 <body>
   <canvas id="sim"></canvas>
-
-  <!-- ===== UI パネル ===== -->
-  <div id="ui">
-    <div id="controls">
-      <button id="resetBtn">リセット</button>
-      <button id="addPlanetBtn">惑星追加</button>
-      <button id="addStarBtn">恒星追加</button>
-      <button id="toggleTrailBtn">軌道非表示</button>
-      <button id="toggleGpuBtn">GPU: OFF</button>
-
-      <!-- 時間スケール -->
-      <div class="slider-container">
-        <span>時間速度:</span>
-        <input type="range" id="timeSpeed" min="0.1" max="3" step="0.1" value="1" />
-        <span id="timeValue">1.0x</span>
-      </div>
-      <!-- ズーム -->
-      <div class="slider-container">
-        <span>ズーム:</span>
-        <input type="range" id="zoomLevel" min="0.2" max="3" step="0.1" value="1" />
-        <span id="zoomValue">1.0x</span>
-      </div>
-    </div>
+  <div id="controls">
+    <button id="addAntBtn">アリ追加</button>
+    <button id="addFoodBtn">餌追加</button>
+    <button id="togglePheromoneBtn">フェロモン表示</button>
+    <button id="resetBtn">リセット</button>
   </div>
-
-  <div id="log"></div>
   <div id="stats"></div>
-  <div class="tooltip" id="tooltip"></div>
-
   <script>
-  /* =========================================================
-    1.  キャンバス & 基本ユーティリティ
-  ========================================================= */
-  const cvs = document.getElementById("sim");
-  const ctx  = cvs.getContext("2d");
-  const DPR  = window.devicePixelRatio || 1;
+    // --- 基本設定 ---
+    const cvs = document.getElementById("sim");
+    const ctx = cvs.getContext("2d");
+    let W = window.innerWidth, H = window.innerHeight;
+    cvs.width = W;
+    cvs.height = H;
 
-  let W, H, CX, CY;
-  const TAU  = Math.PI * 2;
-  const rand = (a, b) => Math.random() * (b - a) + a;
-  const randInt = (a, b) => Math.floor(rand(a, b + 1));
+    window.addEventListener("resize", () => {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      cvs.width = W;
+      cvs.height = H;
+    });
 
-  function resize() {
-    W = innerWidth;
-    H = innerHeight;
-    CX = W / 2;
-    CY = H / 2;
+    // --- 巣・餌・アリ・フェロモン ---
+    const nest = { x: W/2, y: H/2, r: 18 };
+    const foods = [];
+    const ants = [];
+    const pheromones = []; // {x, y, strength, type: "toFood"|"toNest"}
 
-    cvs.width  = W * DPR;
-    cvs.height = H * DPR;
-    cvs.style.width  = W + "px";
-    cvs.style.height = H + "px";
+    let showPheromone = true;
 
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  }
-  resize();
-  window.addEventListener("resize", resize);
-
-  /* =========================================================
-    2.   設定オブジェクト & ライフサイクル用変数
-  ========================================================= */
-  const CONFIG = {
-    G: 2e-4,                 // 重力定数 (調整用)
-    timeScale: 1,            // シミュの速度倍率
-    zoom: 1,                 // ズーム倍率
-    showTrails: true,
-    useGPU: false,           // GPU 計算モード
-
-    maxBodies: 2048          // GPU カーネルの固定サイズ (要 2^n でなくても可)
-  };
-
-  /* =========================================================
-    3.  ログ & デバッグパネル
-  ========================================================= */
-  const logEl = document.getElementById("log");
-  const logs  = [];
-  function addLog(msg) {
-    const t = new Date().toLocaleTimeString("ja-JP", {hour12:false});
-    logs.unshift(`[${t}] ${msg}`);
-    if (logs.length > 100) logs.pop();
-    logEl.textContent = logs.join("\n");
-    logEl.scrollTop = 0;
-  }
-
-  /* =========================================================
-    4.  天体クラス
-  ========================================================= */
-  class Body {
-    constructor({name, color, m, r, x, y, vx=0, vy=0, type="planet"}) {
-      Object.assign(this, {name, color, m, r, x, y, vx, vy, type});
-      this.ax = this.ay = 0;
-      this.trail = [];
-      this.trailMax = 120;
-      this.alive = true;
-    }
-    update(dt) {
-      // 簡易リープフロッグ
-      this.vx += this.ax * dt * 0.5 * CONFIG.timeScale;
-      this.vy += this.ay * dt * 0.5 * CONFIG.timeScale;
-      this.x  += this.vx * dt * CONFIG.timeScale;
-      this.y  += this.vy * dt * CONFIG.timeScale;
-      this.ax = this.ay = 0; // 次フレーム用リセット
-
-      if (CONFIG.showTrails) {
-        this.trail.push({x: this.x, y: this.y});
-        if (this.trail.length > this.trailMax) this.trail.shift();
+    // --- アリクラス ---
+    class Ant {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.angle = Math.random() * Math.PI * 2;
+        this.carrying = false;
+        this.target = null;
+        this.trail = [];
       }
-    }
-    draw() {
-      // ◆ 軌道
-      if (CONFIG.showTrails && this.trail.length > 1) {
-        ctx.strokeStyle = this.color + "55";
-        ctx.lineWidth = 1.2;
+      update() {
+        // 餌を持っていない場合：餌探索
+        if (!this.carrying) {
+          // 餌が近くにあれば拾う
+          for (const food of foods) {
+            const dx = food.x - this.x, dy = food.y - this.y;
+            if (Math.hypot(dx, dy) < 10 && food.amount > 0) {
+              this.carrying = true;
+              food.amount--;
+              this.target = { x: nest.x, y: nest.y };
+              break;
+            }
+          }
+          // フェロモン追従 or ランダムウォーク
+          let best = null, bestStrength = 0;
+          if (showPheromone) {
+            for (const p of pheromones) {
+              if (p.type === "toFood") {
+                const d = Math.hypot(p.x - this.x, p.y - this.y);
+                if (d < 30 && p.strength > bestStrength) {
+                  best = p; bestStrength = p.strength;
+                }
+              }
+            }
+          }
+          if (best && Math.random() < 0.8) {
+            this.angle = Math.atan2(best.y - this.y, best.x - this.x) + rand(-0.3, 0.3);
+          } else {
+            this.angle += rand(-0.25, 0.25);
+          }
+        } else {
+          // 餌を持っている場合：巣へ帰る
+          const dx = nest.x - this.x, dy = nest.y - this.y;
+          if (Math.hypot(dx, dy) < nest.r + 2) {
+            this.carrying = false;
+            this.target = null;
+          } else {
+            this.angle = Math.atan2(dy, dx) + rand(-0.15, 0.15);
+          }
+        }
+        // 前進
+        const speed = 1.5;
+        this.x += Math.cos(this.angle) * speed;
+        this.y += Math.sin(this.angle) * speed;
+        // 壁で跳ね返り
+        if (this.x < 0 || this.x > W) this.angle = Math.PI - this.angle;
+        if (this.y < 0 || this.y > H) this.angle *= -1;
+        // フェロモンを残す
+        if (Math.random() < 0.05) {
+          pheromones.push({ x: this.x, y: this.y, strength: 10, type: "toFood" });
+        }
+      }
+      draw() {
+        ctx.fillStyle = "#fff";
         ctx.beginPath();
-        ctx.moveTo(this.trail[0].x, this.trail[0].y);
-        this.trail.forEach(p => ctx.lineTo(p.x, p.y));
-        ctx.stroke();
+        ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // フェロモンの軌跡
+        if (this.trail.length > 0) {
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(this.x, this.y);
+          for (const p of this.trail) {
+            ctx.lineTo(p.x, p.y);
+          }
+          ctx.stroke();
+        }
       }
-      // ◆ 本体
-      ctx.fillStyle = this.color;
+    }
+
+    // --- 餌クラス ---
+    class Food {
+      constructor(x, y, amount = 5) {
+        this.x = x;
+        this.y = y;
+        this.amount = amount;
+      }
+      draw() {
+        ctx.fillStyle = "#ff0";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // --- フェロモン描画 ---
+    function drawPheromones() {
+      for (const p of pheromones) {
+        ctx.fillStyle = p.type === "toFood" ? "rgba(255, 255, 0, 0.6)" : "rgba(255, 0, 0, 0.6)";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.strength / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // --- 初期化 ---
+    function init() {
+      // 初期餌
+      for (let i = 0; i < 10; i++) {
+        const x = Math.random() * W;
+        const y = Math.random() * H;
+        foods.push(new Food(x, y, Math.floor(Math.random() * 10) + 5));
+      }
+      // 初期アリ
+      for (let i = 0; i < 5; i++) {
+        const x = W / 2 + Math.random() * 100 - 50;
+        const y = H / 2 + Math.random() * 100 - 50;
+        ants.push(new Ant(x, y));
+      }
+    }
+    init();
+
+    // --- メインループ ---
+    function loop() {
+      ctx.clearRect(0, 0, W, H);
+
+      // フェロモン描画
+      if (showPheromone) {
+        drawPheromones();
+      }
+
+      // 巣
+      ctx.fillStyle = "#fff";
       ctx.beginPath();
-      ctx.arc(this.x, this.y, this.r, 0, TAU);
-      ctx.fill();
-    }
-  }
-
-  /* =========================================================
-    5.  中心恒星 (描画のみ – 計算では質量を直接使用)
-  ========================================================= */
-  const SUN = {
-    x: () => CX,
-    y: () => CY,
-    m: 1e7,
-    r: 35,
-    draw() {
-      const g = ctx.createRadialGradient(this.x(), this.y(), 0, this.x(), this.y(), this.r * 3);
-      g.addColorStop(0, "#fff");
-      g.addColorStop(0.4, "#fff6b5");
-      g.addColorStop(0.8, "#ffca28");
-      g.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(this.x(), this.y(), this.r * 3, 0, TAU);
+      ctx.arc(nest.x, nest.y, nest.r, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = "#ffca28";
-      ctx.beginPath();
-      ctx.arc(this.x(), this.y(), this.r, 0, TAU);
-      ctx.fill();
+      // 餌
+      for (const food of foods) {
+        food.draw();
+      }
+
+      // アリ
+      for (const ant of ants) {
+        ant.update();
+        ant.draw();
+      }
+
+      // ステータス表示
+      const stats = `アリ: ${ants.length} | 餌: ${foods.length} | フェロモン: ${pheromones.length}`;
+      ctx.fillStyle = "#fff";
+      ctx.font = "16px Arial";
+      ctx.fillText(stats, 10, 20);
+
+      requestAnimationFrame(loop);
     }
-  };
+    loop();
 
-  /* =========================================================
-    6.  初期惑星セット生成
-  ========================================================= */
-  function spawnInitialBodies() {
-    const data = [
-      {n: "水星", c: "#a9a9a9", m: 3,  r: 3,   d: 70},
-      {n: "金星", c: "#e0c16c", m: 5,  r: 4,   d: 110},
-      {n: "地球", c: "#4fc3f7", m: 6,  r: 4.8, d: 160},
-      {n: "火星", c: "#ff7043", m: 3,  r: 3.5, d: 220},
-      {n: "木星", c: "#fbc02d", m: 200, r: 8, d: 330}
-    ];
-
-    return data.map(p => {
-      const ang = rand(0, TAU);
-      const x = CX + Math.cos(ang) * p.d;
-      const y = CY + Math.sin(ang) * p.d;
-      const v = Math.sqrt(CONFIG.G * SUN.m / p.d);
-      const vx = -Math.sin(ang) * v;
-      const vy =  Math.cos(ang) * v;
-      return new Body({name: p.n, color: p.c, m: p.m, r: p.r, x, y, vx, vy});
-    });
-  }
-
-  let bodies = spawnInitialBodies();
-
-  /* =========================================================
-    7.  GPU.js カーネル定義 & バッファ
-  ========================================================= */
-  const gpu = new GPU();
-  let kernel;
-
-  // 動的に最大数を確保する (空きはゼロ質量で無視)
-  let px = new Float32Array(CONFIG.maxBodies);
-  let py = new Float32Array(CONFIG.maxBodies);
-  let pvx = new Float32Array(CONFIG.maxBodies);
-  let pvy = new Float32Array(CONFIG.maxBodies);
-  let pm = new Float32Array(CONFIG.maxBodies);
-
-  function buildKernel() {
-    kernel = gpu.createKernel(function(px, py, pvx, pvy, pm, n, G, dt) {
-      const i = this.thread.x;
-      if (i >= n) return;
-
-      let ax = 0.0,
-          ay = 0.0;
-      const xi = px[i];
-      const yi = py[i];
-
-      // 中心恒星との重力
-      const dxSun = this.constants.CX - xi;
-      const dySun = this.constants.CY - yi;
-      const r2Sun = dxSun*dxSun + dySun*dySun + 1e-6;
-      let f = G * this.constants.SUN_M / r2Sun;
-      let invRSun = 1.0 / Math.sqrt(r2Sun);
-      ax += f * dxSun * invRSun;
-      ay += f * dySun * invRSun;
-
-      // 相互重力
-      for (let j = 0; j < n; j++) {
-        if (i === j) continue;
-        const dx = px[j] - xi;
-        const dy = py[j] - yi;
-        const r2 = dx*dx + dy*dy + 1e-6;
-        const invR3 = 1.0 / Math.pow(r2, 1.5);
-        f = G * pm[j] * invR3;
-        ax += f * dx;
-        ay += f * dy;
-      }
-
-      let vx = pvx[i] + ax * dt;
-      let vy = pvy[i] + ay * dt;
-      const nx = xi + vx * dt;
-      const ny = yi + vy * dt;
-
-      // RGBA float テクスチャに (x, y, vx, vy) を詰めて返却
-      this.color(nx, ny, vx, vy);
-    }, {
-      output: [CONFIG.maxBodies],
-      pipeline: true,
-      immutable: true,
-      constants: {
-        CX: () => CX,
-        CY: () => CY,
-        SUN_M: SUN.m
-      }
-    });
-  }
-  buildKernel();
-
-  function syncToArrays() {
-    bodies.forEach((b, i) => {
-      px[i]  = b.x;
-      py[i]  = b.y;
-      pvx[i] = b.vx;
-      pvy[i] = b.vy;
-      pm[i]  = b.m;
-    });
-  }
-
-  function syncFromTexture(tex) {
-    const flat = new Float32Array(tex.buffer);
-    bodies.forEach((b, i) => {
-      b.x  = flat[i*4];
-      b.y  = flat[i*4 + 1];
-      b.vx = flat[i*4 + 2];
-      b.vy = flat[i*4 + 3];
-    });
-  }
-
-  /* =========================================================
-    8.  CPU 力計算 (簡易)
-  ========================================================= */
-  function cpuForces(dt) {
-    for (let i = 0; i < bodies.length; i++) {
-      const bi = bodies[i];
-
-      // 恒星 → 惑星
-      {
-        const dx = SUN.x() - bi.x;
-        const dy = SUN.y() - bi.y;
-        const r2 = dx*dx + dy*dy + 1e-6;
-        const invR3 = Math.pow(r2, -1.5);
-        const f = CONFIG.G * SUN.m * invR3;
-        bi.ax += f * dx;
-        bi.ay += f * dy;
-      }
-
-      // 惑星間相互作用
-      for (let j = i + 1; j < bodies.length; j++) {
-        const bj = bodies[j];
-        const dx = bj.x - bi.x;
-        const dy = bj.y - bi.y;
-        const r2 = dx*dx + dy*dy + 1e-6;
-        const invR3 = Math.pow(r2, -1.5);
-        const f = CONFIG.G * invR3;
-        const fx = f * dx;
-        const fy = f * dy;
-
-        bi.ax += fx * bj.m;
-        bi.ay += fy * bj.m;
-        bj.ax -= fx * bi.m;
-        bj.ay -= fy * bi.m;
-      }
-    }
-
-    bodies.forEach(b => b.update(dt));
-  }
-
-  /* =========================================================
-    9.  UI イベント
-  ========================================================= */
-  const resetBtn       = document.getElementById("resetBtn");
-  const addPlanetBtn   = document.getElementById("addPlanetBtn");
-  const addStarBtn     = document.getElementById("addStarBtn");
-  const toggleTrailBtn = document.getElementById("toggleTrailBtn");
-  const toggleGpuBtn   = document.getElementById("toggleGpuBtn");
-  const timeSpeed      = document.getElementById("timeSpeed");
-  const timeValue      = document.getElementById("timeValue");
-  const zoomLevel      = document.getElementById("zoomLevel");
-  const zoomValue      = document.getElementById("zoomValue");
-  const statsEl        = document.getElementById("stats");
-
-  resetBtn.onclick = () => {
-    bodies = spawnInitialBodies();
-    addLog("🔄 シミュレーションをリセット");
-  };
-
-  addPlanetBtn.onclick = () => {
-    const d = rand(80, 700);
-    const ang = rand(0, TAU);
-    const x = CX + Math.cos(ang) * d;
-    const y = CY + Math.sin(ang) * d;
-    const v = Math.sqrt(CONFIG.G * SUN.m / d);
-
-    bodies.push(new Body({
-      name: `惑星-${bodies.length + 1}`,
-      color: `hsl(${randInt(0, 360)}, 70%, 60%)`,
-      m: rand(2, 25),
-      r: rand(3, 6),
-      x, y,
-      vx: -Math.sin(ang) * v,
-      vy:  Math.cos(ang) * v
-    }));
-
-    addLog("🪐 惑星を追加");
-  };
-
-  addStarBtn.onclick = () => {
-    const d = rand(200, 900);
-    const ang = rand(0, TAU);
-    const x = CX + Math.cos(ang) * d;
-    const y = CY + Math.sin(ang) * d;
-    const v = Math.sqrt(CONFIG.G * SUN.m / d) * 0.7;
-
-    bodies.push(new Body({
-      name: `恒星-${bodies.length + 1}`,
-      color: "#ff9800",
-      m: rand(500, 2000),
-      r: rand(12, 24),
-      x, y,
-      vx: -Math.sin(ang) * v,
-      vy:  Math.cos(ang) * v,
-      type: "star"
-    }));
-
-    addLog("⭐ 新しい恒星を追加");
-  };
-
-  toggleTrailBtn.onclick = () => {
-    CONFIG.showTrails = !CONFIG.showTrails;
-    toggleTrailBtn.textContent = CONFIG.showTrails ? "軌道非表示" : "軌道表示";
-  };
-
-  toggleGpuBtn.onclick = () => {
-    CONFIG.useGPU = !CONFIG.useGPU;
-    toggleGpuBtn.textContent = `GPU: ${CONFIG.useGPU ? "ON" : "OFF"}`;
-    addLog(`GPU モードを ${CONFIG.useGPU ? "ON" : "OFF"} に切り替えました`);
-  };
-
-  timeSpeed.oninput = () => {
-    CONFIG.timeScale = parseFloat(timeSpeed.value);
-    timeValue.textContent = CONFIG.timeScale.toFixed(1) + "x";
-  };
-
-  zoomLevel.oninput = () => {
-    CONFIG.zoom = parseFloat(zoomLevel.value);
-    zoomValue.textContent = CONFIG.zoom.toFixed(1) + "x";
-  };
-
-  /* =========================================================
-    10.  メイン描画ループ
-  ========================================================= */
-  let last = performance.now();
-  function loop(now) {
-    const dt = Math.min((now - last) / 16, 3); // 16ms ≈ 60FPS
-    last = now;
-
-    // ★ 背景塗りつぶし (シンプル黒)
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, W, H);
-
-    // カメラ変換
-    ctx.translate(CX * (CONFIG.zoom - 1), CY * (CONFIG.zoom - 1));
-    ctx.scale(CONFIG.zoom, CONFIG.zoom);
-
-    /* ------------ 物理計算 ------------- */
-    if (CONFIG.useGPU) {
-      syncToArrays();
-      const tex = kernel(px, py, pvx, pvy, pm, bodies.length, CONFIG.G * CONFIG.timeScale, dt * CONFIG.timeScale);
-      syncFromTexture(tex);
-    } else {
-      cpuForces(dt);
-    }
-
-    /* ------------ 描画 ------------- */
-    SUN.draw();
-    bodies.forEach(b => b.draw());
-
-    /* ------------ 統計 ------------- */
-    statsEl.textContent = `天体数: ${bodies.length} | GPU: ${CONFIG.useGPU ? "ON" : "OFF"}`;
-
-    requestAnimationFrame(loop);
-  }
-
-  addLog("🌌 シミュレーション開始 – GPU ボタンで高速化を試してみてね！");
-  requestAnimationFrame(loop);
+    // --- UI イベント ---
+    document.getElementById("addAntBtn").onclick = () => {
+      const x = Math.random() * W;
+      const y = Math.random() * H;
+      ants.push(new Ant(x, y));
+    };
+    document.getElementById("addFoodBtn").onclick = () => {
+      const x = Math.random() * W;
+      const y = Math.random() * H;
+      foods.push(new Food(x, y, Math.floor(Math.random() * 10) + 5));
+    };
+    document.getElementById("togglePheromoneBtn").onclick = () => {
+      showPheromone = !showPheromone;
+      const btn = document.getElementById("togglePheromoneBtn");
+      btn.textContent = showPheromone ? "フェロモン非表示" : "フェロモン表示";
+    };
+    document.getElementById("resetBtn").onclick = () => {
+      ants.length = 0;
+      foods.length = 0;
+      pheromones.length = 0;
+      init();
+    };
   </script>
 </body>
 </html>
