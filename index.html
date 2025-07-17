@@ -1169,6 +1169,61 @@
       addLog(`🪐 ダブルクリックで惑星を追加しました`);
     });
     
+    // ★★★ ここから流れ星の実装を追加 ★★★
+    
+    // 流れ星のリスト
+    const meteors = [];
+    
+    // 流れ星を生成する関数
+    function spawnMeteor() {
+      // 画面上部のランダムな位置から斜め下に流れる
+      const startX = rand(0, W);
+      const startY = rand(-100, 0);
+      const angle = rand(Math.PI * 0.65, Math.PI * 0.95); // 斜め下向き
+      const speed = rand(12, 22);
+      meteors.push({
+        x: startX,
+        y: startY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        len: rand(80, 180),
+        alpha: 1.0,
+        width: rand(2, 3.5),
+        color: 'rgba(255,255,200,'
+      });
+    }
+    
+    // 流れ星を描画・更新
+    function updateAndDrawMeteors(dt) {
+      for (let i = meteors.length - 1; i >= 0; i--) {
+        const m = meteors[i];
+        m.x += m.vx * dt;
+        m.y += m.vy * dt;
+        m.alpha -= 0.012 * dt;
+        if (m.alpha <= 0 || m.x < -200 || m.x > W + 200 || m.y > H + 200) {
+          meteors.splice(i, 1);
+          continue;
+        }
+        // 描画
+        ctx.save();
+        ctx.globalAlpha = m.alpha;
+        ctx.strokeStyle = m.color + m.alpha + ')';
+        ctx.lineWidth = m.width;
+        ctx.beginPath();
+        ctx.moveTo(m.x, m.y);
+        ctx.lineTo(m.x - m.vx * (m.len / 20), m.y - m.vy * (m.len / 20));
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    
+    // 一定確率で流れ星を発生させる
+    setInterval(() => {
+      if (Math.random() < 0.4) spawnMeteor();
+    }, 900);
+    
+    // ★★★ ここまで流れ星の実装を追加 ★★★
+    
     /*––––– MAIN LOOP –––––*/
     let last = performance.now();
     function loop(now) {
@@ -1180,6 +1235,10 @@
       // 背景
       drawBackground();
       drawBackgroundStars(now);
+      
+      // 流れ星を描画
+      updateAndDrawMeteors(dt);
+      
       drawGalaxyDisk(now, dt);
       
       // 太陽（常に中心）
